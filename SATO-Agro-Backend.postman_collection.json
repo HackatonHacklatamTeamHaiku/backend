@@ -309,6 +309,152 @@
           }
         },
         {
+          "name": "LLM Chat QA",
+          "description": "Suggested manual QA set for the backend-managed assistant. Check data.reply, data.tool_calls, data.model, and whether the answer stays short, natural, and honest about forecast vs scenario.",
+          "item": [
+            {
+              "name": "QA - Estado Actual",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/api/llm/chat",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "llm",
+                    "chat"
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"como va mi maiz\",\n  \"model\": \"{{model}}\",\n  \"crop\": \"{{crop}}\",\n  \"sowing_date\": \"{{sowing_date}}\",\n  \"lat\": {{lat}},\n  \"lon\": {{lon}},\n  \"target_date\": \"{{target_date}}\"\n}"
+                },
+                "description": "Expected behavior: should usually call getRiskAssessment and answer with a short producer-friendly summary."
+              }
+            },
+            {
+              "name": "QA - Fertilización",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/api/llm/chat",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "llm",
+                    "chat"
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"le echo abono?\",\n  \"model\": \"{{model}}\",\n  \"crop\": \"{{crop}}\",\n  \"sowing_date\": \"{{sowing_date}}\",\n  \"lat\": {{lat}},\n  \"lon\": {{lon}},\n  \"target_date\": \"{{target_date}}\"\n}"
+                },
+                "description": "Expected behavior: if the context is dry or risky, answer should advise against fertilizing in dry conditions."
+              }
+            },
+            {
+              "name": "QA - En 7 Días",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/api/llm/chat",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "llm",
+                    "chat"
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"y en 7 dias?\",\n  \"model\": \"{{model}}\",\n  \"crop\": \"{{crop}}\",\n  \"sowing_date\": \"{{sowing_date}}\",\n  \"lat\": {{lat}},\n  \"lon\": {{lon}},\n  \"target_date\": \"2026-05-23\"\n}"
+                },
+                "description": "Expected behavior: should treat this as pronóstico, not certainty. Tool calling should usually include getRiskAssessment."
+              }
+            },
+            {
+              "name": "QA - En 30 Días",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/api/llm/chat",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "llm",
+                    "chat"
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"y en 30 dias?\",\n  \"model\": \"{{model}}\",\n  \"crop\": \"{{crop}}\",\n  \"sowing_date\": \"{{sowing_date}}\",\n  \"lat\": {{lat}},\n  \"lon\": {{lon}},\n  \"target_date\": \"2026-06-15\"\n}"
+                },
+                "description": "Expected behavior: should explicitly frame this as escenario, not precise forecast."
+              }
+            },
+            {
+              "name": "QA - Explícamelo Simple",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/api/llm/chat",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "llm",
+                    "chat"
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"explicamelo simple\",\n  \"model\": \"{{model}}\",\n  \"crop\": \"{{crop}}\",\n  \"sowing_date\": \"{{sowing_date}}\",\n  \"lat\": {{lat}},\n  \"lon\": {{lon}},\n  \"target_date\": \"{{target_date}}\",\n  \"conversation\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"como va mi maiz\"\n    }\n  ]\n}"
+                },
+                "description": "Expected behavior: short, natural reformulation for producer, often without needing another fresh tool call."
+              }
+            }
+          ]
+        },
+        {
           "name": "LLM Explain",
           "request": {
             "method": "POST",

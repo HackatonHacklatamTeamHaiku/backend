@@ -1,155 +1,308 @@
 # Hybrid Backend Shape
 
-This backend now exposes a shared canonical layer for:
+This backend now exposes a shared surface for:
 
-- frontend components
-- ML feature ingestion
-- LLM function calling
-- RAG document retrieval metadata
+- frontend UI
+- explainable risk workflows
+- tool-calling assistants
+- document discovery for RAG
 
-The goal is one source of truth with different views of the same data, instead of separate backend shapes per consumer.
+The goal is one backend truth with a small number of clear entrypoints.
 
-## Canonical API Surface
+---
 
-### `GET /api/v1/stations`
-Human-readable station directory for UI selectors, map markers, and lookup.
+## Primary API Surface
 
-Returns:
-- `station_id`
-- `station_code`
-- `station_name`
-- `station_label`
-- `lat`
-- `lon`
-- `source`
+These are the preferred routes for new frontend and assistant work.
 
-Use cases:
-- populate frontend dropdowns
-- resolve nearest station labels
-- map stable IDs to plain names for AI tools
+### `GET /api/weather/observed`
 
-### `GET /api/v1/features/current`
-Flattened current observation rows for ML and analytics.
+Observed weather bundle for a point.
 
-Returns one row per station with:
-- station identity fields
-- coordinates
-- UTC and local timestamps
+Returns fields like:
+
+- `location`
+- `nearest_rain_station`
+- `nearest_temperature_station`
+- `nearest_wind_station`
+- `rain_recent_mm`
 - `temperature_current_c`
 - `temperature_max_c`
 - `temperature_min_c`
-- `temperature_diurnal_range_c`
+- `wind_speed_kmh`
 - `wind_direction_deg`
-- `wind_speed`
-- completeness flags
-- `observation_age_minutes`
+- `is_raining`
+- `observed_at`
+- `warnings`
+- `sources_used`
 
 Use cases:
-- feed batch feature jobs
-- power frontend tables/cards without nested parsing
-- expose clean numeric tool outputs to an LLM
+
+- dashboard weather cards
+- location-aware observed conditions
+- freshness and confidence indicators
+
+---
+
+### `GET /api/weather/forecast`
+
+Forecast or scenario bundle for a point and date.
+
+Returns fields like:
+
+- `target_date`
+- `horizon`
+- `rain_sum_mm`
+- `rain_probability_max`
+- `temp_max_c`
+- `temp_min_c`
+- `wind_max_kmh`
+- `et0_sum_mm`
+- `soil_moisture_model`
+- `warnings`
+
+Horizons currently used by the backend:
+
+- `present`
+- `1_3_days`
+- `4_7_days`
+- `8_16_days`
+- `gt_16_days`
+
+Use cases:
+
+- forecast cards
+- planning views
+- slider-driven date exploration
+
+Important:
+
+- `gt_16_days` must be treated as scenario, not precise forecast
+
+---
+
+### `GET /api/geo/context`
+
+Territorial context bundle for a point.
+
+Returns fields like:
+
+- `municipality`
+- `municipality_code`
+- `canton`
+- `basin_id`
+- `soil_context`
+- `climate_outlook_context`
+- `nearest_*_station`
+- `warnings`
+- `sources_used`
+
+Use cases:
+
+- parcel onboarding
+- territorial context panels
+- seasonal dryness and soil modifiers
+
+---
+
+### `GET /api/risk/assessment`
+
+Explainable agroclimatic risk result for crop, sowing date, location, and optional target date.
+
+Returns fields like:
+
+- `risk_score`
+- `risk_level`
+- `confidence`
+- `recommendations`
+- `assumptions`
+- `sources_used`
+- `plant_state`
+- `climate_state`
+- `risk_factors`
+- `risk_overrides`
+- `secondary_alerts`
+- `observed_weather`
+- `forecast_weather`
+- `geo_context`
+- `official_context`
+
+Use cases:
+
+- dashboard main card
+- preventive advisory UI
+- assistant grounding for crop-specific answers
+
+Important:
+
+- use `plant_state`, not `phenology`, as the current backend field
+
+---
+
+### `GET /api/llm/context`
+
+Runtime context bundle for assistants.
+
+Full mode requires:
+
+- `crop`
+- `sowing_date`
+- `lat`
+- `lon`
+
+Optional:
+
+- `target_date`
+
+Fallback mode:
+
+- if only `target_date` is present, backend returns `official_context` only
+
+Returns fields like:
+
+- `current_datetime`
+- `timezone`
+- `user_inputs`
+- `ui_state`
+- `missing_required_user_data`
+- `plant_state`
+- `observed_weather`
+- `forecast_weather`
+- `risk_assessment`
+- `recommendations`
+- `official_context`
+- `sources_used`
+- `source_policy`
+
+Use cases:
+
+- system/runtime context injection for assistants
+- chat orchestration
+
+---
+
+### `POST /api/llm/explain`
+
+Narrative explanation endpoint.
+
+Minimum useful input:
+
+- `risk_assessment`
+
+Recommended additional input:
+
+- `plant_state`
+- `official_context`
+- `recommendations`
+- `audience`
+
+Use cases:
+
+- “Explain this risk” UI action
+- assistant post-processing
+
+---
+
+## Compatibility Surface
+
+These routes still exist intentionally:
 
 ### `GET /api/v1/documents/latest`
-Canonical latest document list for forecast and bulletin sources.
 
-Current records:
+Canonical latest document registry for:
+
 - `forecast_48h`
 - `weekly_forecast_pdf`
 - `agro_bulletin_pdf`
 
-Each record includes:
-- `document_id`
-- `document_type`
-- `title`
-- `summary`
-- `url`
-- `issued_at`
-- `last_modified`
-- `content_text` when available
-
 Use cases:
+
 - RAG indexing
-- latest-document widgets in the frontend
-- AI retrieval metadata before chunking
+- document widgets
+- citation and retrieval workflows
 
-### `GET /api/v1/context/location?lat=&lon=`
-Single context bundle for a location.
+### `GET /api/v1/ai/tools/manifest`
+### `POST /api/v1/ai/tools/call`
 
-Returns:
-- `location`
-- `station`
-- `observation`
-- `features`
-- `documents`
-- `meta`
+Compatibility tool layer for assistants.
 
-Use cases:
-- one-call frontend summary cards
-- LLM tool calling for location-based answers
-- contextual prompt assembly for agents
+Current public semantic tools:
 
-## Legacy Routes Kept
+- `getRiskAssessment`
+- `getOfficialContext`
+- `getPhenologyContext`
+- `explainRecommendation`
 
-These still work and remain useful:
+---
 
-- `GET /api/v1/observations/current`
-- `GET /api/v1/observations/nearest`
-- `GET /api/v1/forecast/48h`
-- `GET /api/v1/forecast/weekly`
-- `GET /api/v1/agro/latest`
-- `GET /api/v1/dashboard/summary`
+## Retired Public Routes
 
-The canonical routes are the preferred surface for new frontend and ML integrations.
+Do not build new frontend or agent integrations on these:
 
-## Consumer Strategy
-
-### Frontend
-Prefer:
+- `/api/v1/observations/current`
+- `/api/v1/observations/nearest`
+- `/api/v1/forecast/48h`
+- `/api/v1/forecast/weekly`
+- `/api/v1/agro/latest`
+- `/api/v1/agro/advisory`
+- `/api/v1/dashboard/summary`
 - `/api/v1/stations`
 - `/api/v1/features/current`
 - `/api/v1/context/location`
 
-Why:
-- fewer nested objects
-- human-readable labels
-- consistent metadata for cards, maps, and selectors
+Some helper logic still exists internally for compatibility and composition, but those routes are no longer part of the intended public contract.
 
-### ML
+---
+
+## Consumer Strategy
+
+### Frontend
+
 Prefer:
-- `/api/v1/features/current`
 
-Persist rows into:
-- `stations`
-- `observation_snapshots`
-- `document_registry`
-
-Recommended next step:
-- schedule ingestion every 10 to 30 minutes into SQLite or Postgres
-
-### LLM / Function Calling
-Prefer:
-- `/api/v1/context/location`
-- `/api/v1/features/current?station_name=...`
-- `/api/v1/documents/latest`
+- `/api/weather/observed`
+- `/api/weather/forecast`
+- `/api/geo/context`
+- `/api/risk/assessment`
+- `/api/llm/explain`
 
 Why:
-- deterministic structured retrieval for fresh numbers
-- document metadata available for RAG and citations
+
+- fewer dead branches
+- better alignment with the manifest model
+- direct access to plant, geo, and risk context
+
+### Tool-calling assistants
+
+Prefer:
+
+- `/api/v1/ai/tools/manifest`
+- `/api/v1/ai/tools/call`
+
+Use:
+
+- `/api/llm/context` when the app wants to pre-compose runtime context itself
 
 ### RAG
+
 Use:
-- `/api/v1/documents/latest` as the registry
+
+- `/api/v1/documents/latest` as the document registry
 
 Then:
-1. download document or HTML source
+
+1. download source
 2. extract text
 3. chunk with metadata
-4. store embeddings keyed by `document_id`, `document_type`, and date fields
+4. store embeddings keyed by `document_id`, `document_type`, and issue date
+
+---
 
 ## Design Rules
 
-- Keep upstream SNET payloads behind the backend.
-- Preserve stable IDs, but always include plain-language names.
-- Prefer flattened rows for ML and nested rich objects for UI context bundles.
-- Treat current numeric data as API/function-call data, not vector-search data.
-- Treat forecasts and bulletins as document data, not primary numeric truth.
+- keep upstream SNET and Open-Meteo payloads behind the backend
+- keep frontend on the manifest-aligned public surface
+- keep tool-calling assistants on the semantic tool layer
+- treat `gt_16_days` as scenario, not precise forecast
+- treat modeled soil moisture as context, not direct field measurement
+- keep `plant_state` and `risk_assessment` as the main decision objects for UI and assistant flows

@@ -184,11 +184,15 @@ def _call_tool(tool_name: str, arguments: dict) -> tuple[dict, int]:
 
     if tool_name == "getOfficialContext":
         target_date = arguments.get("target_date")
-        if not target_date:
-            return {"tool_name": tool_name, "arguments": arguments, "error": "target_date is required"}, 400
         from datetime import datetime
+        from utils.time import EL_SALVADOR_TZ
 
-        result = get_official_context(datetime.strptime(target_date, "%Y-%m-%d").date())
+        resolved_target_date = (
+            datetime.strptime(target_date, "%Y-%m-%d").date()
+            if target_date
+            else datetime.now(EL_SALVADOR_TZ).date()
+        )
+        result = get_official_context(resolved_target_date)
         return {"tool_name": tool_name, "arguments": arguments, "result": result, "meta": {"cached": True, "stale": False, "upstream_status": "ok", "fetched_at": now_utc_iso()}}, 200
 
     if tool_name == "getPhenologyContext":
@@ -226,128 +230,29 @@ def manifest():
         "version": "1.0.0",
         "tools": [
             {
-                "name": "get_stations",
-                "description": "Look up canonical weather stations by id or plain-language name.",
-                "method": "POST",
-                "endpoint": "/api/v1/ai/tools/call",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "station_id": {"type": "integer"},
-                        "station_name": {"type": "string"},
-                    },
-                },
-            },
-            {
-                "name": "get_current_features",
-                "description": "Get flattened current observation features for one station, all stations, or the nearest station to a location.",
-                "method": "POST",
-                "endpoint": "/api/v1/ai/tools/call",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "station_id": {"type": "integer"},
-                        "station_name": {"type": "string"},
-                        "lat": {"type": "number"},
-                        "lon": {"type": "number"},
-                    },
-                },
-            },
-            {
-                "name": "get_latest_documents",
-                "description": "Get the latest forecast and bulletin documents used for RAG and citations.",
-                "method": "POST",
-                "endpoint": "/api/v1/ai/tools/call",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "document_type": {
-                            "type": "string",
-                            "enum": ["forecast_48h", "weekly_forecast_pdf", "agro_bulletin_pdf"],
-                        },
-                    },
-                },
-            },
-            {
-                "name": "get_location_context",
-                "description": "Get one location bundle with nearest station, latest structured observation features, and latest forecast/bulletin documents.",
-                "method": "POST",
-                "endpoint": "/api/v1/ai/tools/call",
-                "input_schema": {
-                    "type": "object",
-                    "required": ["lat", "lon"],
-                    "properties": {
-                        "lat": {"type": "number"},
-                        "lon": {"type": "number"},
-                    },
-                },
-            },
-            {
-                "name": "get_agro_advisory",
-                "description": "Estimate crop phase, explainable agroclimatic risk, and preventive recommendations for maize or bean.",
-                "method": "POST",
-                "endpoint": "/api/v1/ai/tools/call",
-                "input_schema": {
-                    "type": "object",
-                    "required": ["crop", "sowing_date", "lat", "lon"],
-                    "properties": {
-                        "crop": {"type": "string", "enum": ["maiz", "frijol"]},
-                        "sowing_date": {"type": "string", "format": "date"},
-                        "target_date": {"type": "string", "format": "date"},
-                        "lat": {"type": "number"},
-                        "lon": {"type": "number"},
-                        "rain_sum_mm": {"type": "number"},
-                        "et0_sum_mm": {"type": "number"},
-                        "days_window": {"type": "integer"},
-                        "dry_days": {"type": "integer"},
-                        "temp_max_c": {"type": "number"},
-                        "wind_max_kmh": {"type": "number"},
-                        "et0_mm_day": {"type": "number"},
-                        "soil": {
-                            "type": "string",
-                            "enum": ["favorable", "neutral", "unfavorable"],
-                        },
-                        "seasonal": {
-                            "type": "string",
-                            "enum": [
-                                "arriba_lo_normal",
-                                "normal",
-                                "bajo_lo_normal",
-                                "canicula_o_sequia_fuerte",
-                            ],
-                        },
-                        "canicula_watch": {"type": "boolean"},
-                    },
-                },
-            },
-            {
                 "name": "getRiskAssessment",
-                "description": "Manifest-aligned risk assessment for maize or bean using observed, forecast, geo, and official context.",
+                "description": "Calcula estado de planta, clima relevante, factores de riesgo, nivel, confianza y recomendaciones para una fecha especifica.",
                 "method": "POST",
                 "endpoint": "/api/v1/ai/tools/call",
                 "input_schema": {
                     "type": "object",
-                    "required": ["crop", "sowing_date", "lat", "lon"],
                     "properties": {
                         "crop": {"type": "string", "enum": ["maiz", "frijol"]},
                         "sowing_date": {"type": "string", "format": "date"},
                         "target_date": {"type": "string", "format": "date"},
                         "lat": {"type": "number"},
                         "lon": {"type": "number"},
-                        "municipality": {"type": "string"},
-                        "municipality_code": {"type": "string"},
-                        "canton": {"type": "string"},
                     },
+                    "required": ["crop", "sowing_date", "lat", "lon"],
                 },
             },
             {
                 "name": "getOfficialContext",
-                "description": "Return official 2026 canicula context and seasonal explanation snippets.",
+                "description": "Obtiene contexto oficial vigente o relevante sobre canicula, perspectiva climatica, sequia o boletines agroclimaticos.",
                 "method": "POST",
                 "endpoint": "/api/v1/ai/tools/call",
                 "input_schema": {
                     "type": "object",
-                    "required": ["target_date"],
                     "properties": {
                         "lat": {"type": "number"},
                         "lon": {"type": "number"},
@@ -357,22 +262,22 @@ def manifest():
             },
             {
                 "name": "getPhenologyContext",
-                "description": "Return estimated phase and uncertainty from crop plus sowing date.",
+                "description": "Calcula o explica la fase estimada del cultivo para una fecha especifica usando cultivo y fecha de siembra.",
                 "method": "POST",
                 "endpoint": "/api/v1/ai/tools/call",
                 "input_schema": {
                     "type": "object",
-                    "required": ["crop", "sowing_date"],
                     "properties": {
                         "crop": {"type": "string", "enum": ["maiz", "frijol"]},
                         "sowing_date": {"type": "string", "format": "date"},
                         "target_date": {"type": "string", "format": "date"},
                     },
+                    "required": ["crop", "sowing_date"],
                 },
             },
             {
                 "name": "explainRecommendation",
-                "description": "Turn risk assessment plus official context into a simple explanation for the producer or extension team.",
+                "description": "Convierte una evaluacion de riesgo y contexto oficial en una explicacion breve, clara y accionable para productor o tecnico.",
                 "method": "POST",
                 "endpoint": "/api/v1/ai/tools/call",
                 "input_schema": {
@@ -381,9 +286,7 @@ def manifest():
                     "properties": {
                         "risk_assessment": {"type": "object"},
                         "official_context": {"type": "object"},
-                        "plant_state": {"type": "object"},
-                        "recommendations": {"type": "array"},
-                        "audience": {"type": "string"},
+                        "audience": {"type": "string", "enum": ["productor", "tecnico"]},
                     },
                 },
             },

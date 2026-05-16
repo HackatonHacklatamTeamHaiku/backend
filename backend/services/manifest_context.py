@@ -568,8 +568,22 @@ def build_runtime_llm_context(arguments: dict) -> tuple[dict, dict, int]:
     lat = arguments.get("lat")
     lon = arguments.get("lon")
     target_date = arguments.get("target_date")
-    if not crop or not sowing_date or lat is None or lon is None:
-        return {"error": "crop, sowing_date, lat and lon are required"}, _build_meta(
+
+    missing_required_user_data = []
+    if not crop:
+        missing_required_user_data.append("crop")
+    if not sowing_date:
+        missing_required_user_data.append("sowing_date")
+    if lat is None:
+        missing_required_user_data.append("lat")
+    if lon is None:
+        missing_required_user_data.append("lon")
+
+    if missing_required_user_data:
+        return {
+            "error": "crop, sowing_date, lat and lon are required",
+            "missing_required_user_data": missing_required_user_data,
+        }, _build_meta(
             cached=False, stale=False, upstream_status="invalid_request", fetched_at=now_utc_iso()
         ), 400
 
@@ -593,6 +607,7 @@ def build_runtime_llm_context(arguments: dict) -> tuple[dict, dict, int]:
             "selected_horizon": risk["horizon"],
             "visible_panel": arguments.get("visible_panel", "risk_summary"),
         },
+        "missing_required_user_data": [],
         "plant_state": {
             **risk["plant_state"],
             "source": "sato_agro_phenology_table_v1",
@@ -618,6 +633,7 @@ def build_runtime_llm_context(arguments: dict) -> tuple[dict, dict, int]:
         },
         "recommendations": risk["recommendations"],
         "official_context": risk["official_context"],
+        "sources_used": risk["sources_used"],
         "source_policy": {
             "observed": "SNET/MARN observado local",
             "forecast": "Open-Meteo 1-16 dias",

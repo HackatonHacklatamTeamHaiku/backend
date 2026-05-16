@@ -90,6 +90,18 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Create the local env file:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+On Windows PowerShell:
+
+```powershell
+Copy-Item backend\\.env.example backend\\.env
+```
+
 ### Run
 
 ```bash

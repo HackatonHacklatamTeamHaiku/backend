@@ -27,6 +27,63 @@ Flujo recomendado en frontend:
 
 El frontend necesita su `SUPABASE_URL` y su publishable key para hacer login directamente contra Supabase Auth.
 
+Ejemplo de `.env` para frontend:
+
+Para Next.js:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<your-anon-key>
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:5000
+```
+
+Para Vite o React SPA:
+
+```env
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=<your-anon-key>
+VITE_API_BASE_URL=http://127.0.0.1:5000
+```
+
+Inicialización típica:
+
+```ts
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+)
+```
+
+Si usas Next.js:
+
+```ts
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
+)
+```
+
+Login mínimo:
+
+```ts
+const { data, error } = await supabase.auth.signInWithPassword({
+  email,
+  password,
+})
+
+const accessToken = data.session?.access_token
+```
+
+Luego ese `access_token` se manda al backend:
+
+```http
+Authorization: Bearer <supabase_access_token>
+```
+
 Endpoint de sesión actual:
 
 ```http

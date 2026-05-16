@@ -11,177 +11,236 @@ Important:
 - users authenticate through `auth.users`
 - app-specific profile data lives in `profiles`
 - do not store passwords in your own tables
+- the product must work with a very short onboarding flow
 
-## What To Ask The User
+## Product Question To Support
 
-### 1. Account / Identity
+The database should be enough to answer:
 
-Ask:
+```text
+Para mi cultivo de maiz o frijol, en mi ubicacion y etapa de desarrollo, que riesgo tengo y que debo hacer?
+```
 
-- full name
-- phone
-- WhatsApp number
-- preferred language
+## Design Principle
 
-Store in:
+The updated product brief is intentionally lightweight:
+
+- ask only what is needed to personalize risk
+- keep personal data optional when anonymous flow is enough
+- store user observations separately from fixed parcel data
+- derive as much as possible in the backend instead of asking the user
+
+## Canonical Data Groups
+
+The input should be split into 4 groups:
+
+1. `user_profile`
+2. `plot`
+3. `crop_cycle`
+4. `farmer_observation`
+
+This matters because not every field changes at the same speed.
+
+Examples:
+
+- `phone` belongs to `profiles`
+- `preferred_channel` belongs to `user_preferences`
+- `lat/lon` for the working parcel belong to `plots`
+- `crop` and `sowing_date` belong to `crop_cycles`
+- `soil_observation` and `crop_condition_reported` belong to `farmer_observations`
+
+## Minimal Mandatory Data For Personalized Recommendation
+
+These are the minimum required fields from the updated product logic:
+
+| Product field | Type | Table | Column |
+|---|---|---|---|
+| `crop` | enum | `crop_cycles` | `crop_type_id` |
+| `sowing_date` | date | `crop_cycles` | `sowing_date` |
+| `lat` | number | `plots` | `centroid_lat` |
+| `lon` | number | `plots` | `centroid_lon` |
+
+Without these fields, the app can only provide general guidance, not personalized advice.
+
+## Recommended Data
+
+| Product field | Type | Table | Column |
+|---|---|---|---|
+| `municipality` | string | `farms` or `profiles` | `municipality` |
+| `canton` | string | `farms` | `canton` |
+| `variety_cycle_days` | integer | `crop_cycles` | `variety_cycle_days` |
+| `soil_observation` | enum | `farmer_observations` | `soil_observation` |
+| `last_rain_observed_by_farmer` | date/null | `farmer_observations` | `last_rain_observed_by_farmer` |
+| `has_irrigation` | boolean | `plots` | `irrigation_available` |
+
+`has_irrigation` is useful for recommendations, but it is no longer part of the minimum mandatory capture set.
+
+## Optional High-Value Data
+
+| Product field | Type | Table | Column |
+|---|---|---|---|
+| `farmer_name_or_alias` | string | `profiles` | `full_name` or `display_name` |
+| `phone` | string | `profiles` | `phone` |
+| `preferred_channel` | enum | `user_preferences` | `preferred_channel` |
+| `uses_fertilizer` | boolean | `crop_cycles` | `uses_fertilizer` |
+| `crop_condition_reported` | enum | `farmer_observations` | `crop_condition_reported` |
+| `photo_available` | boolean | `farmer_observations` | `photo_available` |
+| `water_source` | enum | `plots` | `water_source` |
+
+## Derived Data The App Should Compute
+
+These values should not be asked directly from the user when they can be computed:
+
+| Derived field | Source |
+|---|---|
+| `days_after_sowing` | `sowing_date` + current date |
+| `estimated_phase` | phenology rules + `days_after_sowing` |
+| `planting_season` | `sowing_date` |
+| `nearest_rain_station` | plot coordinates + weather stations |
+| `nearest_temperature_station` | plot coordinates + weather stations |
+| `basin_id` | plot coordinates + hydrologic layers |
+| `soil_context` | plot / municipality + soil sources |
+| `risk_level` | advisory engine |
+| `recommended_actions` | advisory engine |
+
+## Mapping To Tables
+
+### 1. User Profile
+
+Store identity and communication in:
 
 - `profiles`
 - `user_preferences`
 
-### 2. Base Location
+Suggested fields:
 
-Ask:
+- `profiles.full_name`
+- `profiles.display_name`
+- `profiles.phone`
+- `profiles.whatsapp_phone`
+- `profiles.preferred_language`
+- `user_preferences.preferred_channel`
 
-- country
-- department
-- municipality
-- optional exact coordinates
+All of these can be nullable except what your auth or UX flow requires.
 
-Store in:
+### 2. Plot / Parcel
 
-- `profiles.default_lat`
-- `profiles.default_lon`
-- `profiles.department`
-- `profiles.municipality`
-
-### 3. Farm Information
-
-Ask:
-
-- farm name
-- department
-- municipality
-- canton / caserío if available
-- approximate farm area
-- optional coordinates
-
-Store in:
+Store working location and semi-fixed parcel context in:
 
 - `farms`
-
-### 4. Plot / Parcel Information
-
-Ask:
-
-- plot name
-- plot size
-- irrigation available or not
-- water source
-- soil type
-- optional coordinates
-
-Store in:
-
 - `plots`
 
-### 5. Crops Managed
+Main fields:
 
-You already know the main crops are:
+- `farms.farm_name`
+- `farms.department`
+- `farms.municipality`
+- `farms.canton`
+- `plots.plot_name`
+- `plots.centroid_lat`
+- `plots.centroid_lon`
+- `plots.irrigation_available`
+- `plots.water_source`
+- `plots.area_mz`
 
-- `maize`
-- `bean`
+If there is no precise coordinate yet, you can temporarily use municipality/canton and mark lower confidence in the application layer.
 
-Ask:
+### 3. Active Crop Cycle
 
-- which crops the user manages
-- which one is primary
-
-Store in:
-
-- `user_crop_interests`
-
-### 6. Active Crop Cycle
-
-Ask:
-
-- crop type
-- sowing date
-- variety
-- planting method
-- expected harvest date if known
-
-Store in:
+Store stable crop-cycle data in:
 
 - `crop_cycles`
 
-### 7. Plant Phase
+Main fields:
 
-You have two options:
+- `crop_cycles.crop_type_id`
+- `crop_cycles.sowing_date`
+- `crop_cycles.seed_variety`
+- `crop_cycles.variety_cycle_days`
+- `crop_cycles.planting_season`
+- `crop_cycles.production_purpose`
+- `crop_cycles.uses_fertilizer`
 
-1. ask the user directly for current phase
-2. estimate phase from `sowing_date` with your advisory engine
+This table should describe the cycle itself, not ephemeral field observations.
 
-Best practical approach:
+### 4. Farmer Observation
 
-- ask for `sowing_date`
-- optionally ask current visible phase
-- keep official/current estimated phase in `crop_cycles.current_phase_id`
-- store changes over time in `cycle_phase_history`
+Store user-reported field observations in:
 
-## What The System Should Store Automatically
+- `farmer_observations`
 
-Without asking the user again, the backend can later store:
+Main fields:
 
-- detected or estimated phenological phase
-- advisory history
-- risk level history
-- message delivery history
-- station used for advisory context
+- `farmer_observations.soil_observation`
+- `farmer_observations.last_rain_observed_by_farmer`
+- `farmer_observations.crop_condition_reported`
+- `farmer_observations.photo_available`
+- `farmer_observations.reported_at`
 
-Store in:
+This separation is useful because these values can change often during the cycle.
 
-- `cycle_phase_history`
-- `advisory_runs`
-- `advisory_messages`
+## Capture Rules
 
-## Recommended Minimal MVP Onboarding
+- If there is no coordinate, ask for municipality/canton and mark lower confidence.
+- If there is no sowing date, do not estimate phase yet.
+- If the farmer reports a condition that conflicts with estimated phase, store both and lower confidence in the advisory layer.
+- Do not require personal data if the product can work anonymously.
 
-If you want the shortest onboarding possible, ask only:
+## Recommended MVP Onboarding
 
-1. full name
-2. WhatsApp or phone
-3. municipality
-4. crop type
-5. sowing date
-6. approximate plot location
+For the shortest possible onboarding, ask only:
+
+1. crop
+2. sowing date
+3. parcel coordinates
 
 That is enough to power:
 
 - nearest station lookup
 - estimated phase
-- risk logic
-- advisory messages
+- basic risk logic
+- climate-aware advisory generation
 
 ## Recommended Better Onboarding
 
-If you want stronger agronomic context, ask:
+If you want stronger agronomic context, add:
 
-1. full name
-2. phone / WhatsApp
-3. municipality
-4. farm name
-5. plot name
-6. plot size
-7. irrigation available
-8. crop type
-9. variety
-10. sowing date
+1. municipality
+2. canton
+3. irrigation available
+4. variety cycle days
+5. soil observation
+6. last rain observed by farmer
+7. crop condition reported
+8. preferred channel
 
-This gives you a much better base for future recommendations.
+## Suggested Human Capture Prompts
+
+Short producer version:
+
+1. Que cultivo tiene sembrado: maiz o frijol?
+2. Cuando lo sembro?
+3. Donde esta la parcela?
+4. El suelo se ve seco, humedo o encharcado?
+
+Extensionista version:
+
+1. Municipio y canton del productor?
+2. Cultivo y fecha de siembra?
+3. Se observan sintomas de marchitez, amarillamiento o aborto floral?
 
 ## Main Relationships
 
 - one `profile` can have many `farms`
 - one `farm` can have many `plots`
 - one `plot` can have many `crop_cycles`
+- one `crop_cycle` can have many `farmer_observations`
 - one `crop_type` has many `phenological_phases`
 - one `crop_cycle` has many `cycle_phase_history` rows
 - one `crop_cycle` can have many `advisory_runs`
 - one `advisory_run` can have many `advisory_messages`
 
-## Recommended First Tables To Actually Build
-
-If you want to implement in phases, do:
+## Recommended Build Order
 
 Phase 1:
 
@@ -194,6 +253,7 @@ Phase 1:
 
 Phase 2:
 
+- `farmer_observations`
 - `phenological_phases`
 - `cycle_phase_history`
 
@@ -207,5 +267,5 @@ Phase 3:
 
 - use `uuid` primary keys
 - use `auth.users.id` as `profiles.id`
-- add RLS later so users only see their own farms, plots, and cycles
-- consider using Supabase Storage later for uploaded plot files or images
+- add RLS later so users only see their own farms, plots, cycles, and observations
+- use Supabase Storage later if you decide to store field photos

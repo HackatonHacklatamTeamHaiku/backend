@@ -13,8 +13,15 @@ Project sato_agro {
   - user login and profile
   - user location and farm structure
   - maize and bean crop cycles
+  - lightweight anonymous-friendly onboarding
+  - farmer observations separated from fixed cycle data
   - phenological phase tracking
   - advisory delivery and history
+
+  Product capture rule:
+  - minimum mandatory data for personalized recommendation:
+    crop, sowing_date, lat, lon
+  - everything else should be optional, recommended, or derived by the app
   '''
 }
 
@@ -58,9 +65,53 @@ Enum advisory_status {
   expired
 }
 
+Enum preferred_channel {
+  whatsapp
+  sms
+  extensionista
+  app
+}
+
+Enum production_purpose {
+  autoconsumo
+  venta
+  mixto
+}
+
+Enum planting_season {
+  primera
+  postrera
+  apante
+  relevo_milpa
+}
+
+Enum soil_observation {
+  seco
+  humedo
+  encharcado
+  desconocido
+}
+
+Enum water_source_type {
+  pozo
+  rio
+  reservorio
+  ninguna
+  desconocida
+}
+
+Enum crop_condition_reported {
+  normal
+  marchitez
+  amarillamiento
+  floracion
+  vainas
+  desconocido
+}
+
 Table profiles {
   id uuid [pk, note: "References Supabase auth.users.id"]
-  full_name varchar(150) [not null]
+  full_name varchar(150)
   display_name varchar(80)
   phone varchar(30)
   whatsapp_phone varchar(30)
@@ -84,6 +135,7 @@ Table profiles {
 
 Table user_preferences {
   profile_id uuid [pk, ref: > profiles.id]
+  preferred_channel preferred_channel [not null, default: 'app']
   alert_whatsapp_enabled boolean [not null, default: true]
   alert_sms_enabled boolean [not null, default: false]
   alert_push_enabled boolean [not null, default: false]
@@ -123,11 +175,12 @@ Table plots {
   plot_name varchar(150) [not null]
   plot_code varchar(50)
   area_ha decimal(10,2)
+  area_mz decimal(10,2) [note: "Area in manzanas, commonly used locally"]
   centroid_lat decimal(9,6)
   centroid_lon decimal(9,6)
   elevation_m integer
   irrigation_available boolean [not null, default: false]
-  water_source varchar(120)
+  water_source water_source_type
   soil_type varchar(120)
   slope_class varchar(50)
   notes text
@@ -172,12 +225,16 @@ Table crop_cycles {
   owner_profile_id uuid [not null, ref: > profiles.id]
   crop_type_id smallint [not null, ref: > crop_types.id]
   season_label varchar(80)
+  production_purpose production_purpose
+  planting_season planting_season
   sowing_date date [not null]
   expected_harvest_date date
   actual_harvest_date date
   seed_variety varchar(120)
+  variety_cycle_days integer [note: "Optional known variety cycle duration in days"]
   seed_source varchar(120)
   planting_method varchar(80)
+  uses_fertilizer boolean
   current_phase_id uuid [ref: > phenological_phases.id]
   current_phase_day integer
   status cycle_status [not null, default: 'active']
@@ -192,6 +249,25 @@ Table crop_cycles {
     crop_type_id
     sowing_date
     status
+  }
+}
+
+Table farmer_observations {
+  id uuid [pk, default: `gen_random_uuid()`]
+  crop_cycle_id uuid [not null, ref: > crop_cycles.id]
+  profile_id uuid [ref: > profiles.id]
+  soil_observation soil_observation [not null, default: 'desconocido']
+  last_rain_observed_by_farmer date
+  crop_condition_reported crop_condition_reported [not null, default: 'desconocido']
+  photo_available boolean [not null, default: false]
+  reported_at timestamptz [not null, default: `now()`]
+  notes text
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    crop_cycle_id
+    profile_id
+    reported_at
   }
 }
 
@@ -278,4 +354,10 @@ phenological_phases:
 - define a sequence for bean
 - include start_day_after_sowing and end_day_after_sowing
 - mark critical phases such as flowering / grain filling when appropriate
+
+Recommended capture mapping from the current product brief:
+- mandatory: crop, sowing_date, lat, lon
+- recommended: municipality, canton, variety_cycle_days, soil_observation, last_rain_observed_by_farmer
+- optional high-value: alias/name, phone, preferred_channel, uses_fertilizer, crop_condition_reported, photo_available
+- derived by app: days_after_sowing, estimated_phase, planting_season, nearest stations, basin, risk_level, recommended_actions
 '''

@@ -5,6 +5,8 @@ LLM-facing tool routes built on top of the canonical backend layer.
 from __future__ import annotations
 
 import logging
+import math
+from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
@@ -17,6 +19,10 @@ from services.manifest_context import (
     get_official_context,
     get_phenology_context,
     get_risk_assessment,
+    get_weather_observed,
+    _parse_coordinate,
+    _parse_request_date,
+    _validate_supported_location,
 )
 from routes.canonical import (
     _build_meta,
@@ -26,7 +32,7 @@ from routes.canonical import (
     _get_weekly_document,
 )
 from utils.geo import find_nearest
-from utils.time import now_utc_iso
+from utils.time import EL_SALVADOR_TZ, now_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +130,31 @@ def _location_context(lat: float, lon: float) -> tuple[dict, dict]:
     return to_dict(payload), to_dict(payload.meta)
 
 
+def _invalid_tool_request(tool_name: str, arguments: dict, message: str) -> tuple[dict, int]:
+    return {
+        "tool_name": tool_name,
+        "arguments": arguments,
+        "error": message,
+        "meta": _build_meta(
+            cached=False,
+            stale=False,
+            upstream_status="invalid_request",
+            fetched_at=now_utc_iso(),
+        ),
+    }, 400
+
+
+def _parse_tool_coordinate(value, field_name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{field_name} must be a finite decimal number")
+    if isinstance(value, (int, float)):
+        parsed = float(value)
+        if not math.isfinite(parsed):
+            raise ValueError(f"{field_name} must be a finite decimal number")
+        return parsed
+    return _parse_coordinate(value, field_name)
+
+
 def _call_tool(tool_name: str, arguments: dict) -> tuple[dict, int]:
     """Dispatch one AI tool call and return a JSON-safe payload + status code."""
     if tool_name == "get_stations":
@@ -182,16 +213,30 @@ def _call_tool(tool_name: str, arguments: dict) -> tuple[dict, int]:
             body["error"] = result.get("error")
         return body, status
 
+    if tool_name == "getWeatherObserved":
+        lat = arguments.get("lat")
+        lon = arguments.get("lon")
+        if lat is None or lon is None:
+            return _invalid_tool_request(tool_name, arguments, "lat and lon are required")
+        try:
+            parsed_lat = _parse_tool_coordinate(lat, "lat")
+            parsed_lon = _parse_tool_coordinate(lon, "lon")
+            _validate_supported_location(parsed_lat, parsed_lon)
+        except ValueError as exc:
+            return _invalid_tool_request(tool_name, arguments, str(exc))
+        result, meta = get_weather_observed(parsed_lat, parsed_lon)
+        return {"tool_name": tool_name, "arguments": arguments, "result": result, "meta": meta}, 200
+
     if tool_name == "getOfficialContext":
         target_date = arguments.get("target_date")
-        from datetime import datetime
-        from utils.time import EL_SALVADOR_TZ
-
-        resolved_target_date = (
-            datetime.strptime(target_date, "%Y-%m-%d").date()
-            if target_date
-            else datetime.now(EL_SALVADOR_TZ).date()
-        )
+        try:
+            resolved_target_date = (
+                _parse_request_date(target_date, "target_date")
+                if target_date
+                else datetime.now(EL_SALVADOR_TZ).date()
+            )
+        except ValueError as exc:
+            return _invalid_tool_request(tool_name, arguments, str(exc))
         result = get_official_context(resolved_target_date)
         return {"tool_name": tool_name, "arguments": arguments, "result": result, "meta": {"cached": True, "stale": False, "upstream_status": "ok", "fetched_at": now_utc_iso()}}, 200
 
@@ -199,8 +244,11 @@ def _call_tool(tool_name: str, arguments: dict) -> tuple[dict, int]:
         crop = arguments.get("crop")
         sowing_date = arguments.get("sowing_date")
         if not crop or not sowing_date:
-            return {"tool_name": tool_name, "arguments": arguments, "error": "crop and sowing_date are required"}, 400
-        result = get_phenology_context(crop, sowing_date, arguments.get("target_date"))
+            return _invalid_tool_request(tool_name, arguments, "crop and sowing_date are required")
+        try:
+            result = get_phenology_context(crop, sowing_date, arguments.get("target_date"))
+        except ValueError as exc:
+            return _invalid_tool_request(tool_name, arguments, str(exc))
         return {"tool_name": tool_name, "arguments": arguments, "result": result, "meta": {"cached": True, "stale": False, "upstream_status": "ok", "fetched_at": now_utc_iso()}}, 200
 
     if tool_name == "buildRuntimeContext":
@@ -247,6 +295,20 @@ def manifest():
                 },
             },
             {
+                "name": "getWeatherObserved",
+                "description": "Obtiene clima observado normalizado para una ubicacion: lluvia reciente, temperatura, viento y estaciones cercanas.",
+                "method": "POST",
+                "endpoint": "/api/v1/ai/tools/call",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "lat": {"type": "number"},
+                        "lon": {"type": "number"},
+                    },
+                    "required": ["lat", "lon"],
+                },
+            },
+            {
                 "name": "getOfficialContext",
                 "description": "Obtiene contexto oficial vigente o relevante sobre canicula, perspectiva climatica, sequia o boletines agroclimaticos.",
                 "method": "POST",
@@ -276,6 +338,24 @@ def manifest():
                 },
             },
             {
+                "name": "buildRuntimeContext",
+                "description": "Construye el contexto completo para asistentes: inputs de usuario, clima observado/pronosticado, contexto territorial, riesgo y recomendaciones.",
+                "method": "POST",
+                "endpoint": "/api/v1/ai/tools/call",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "crop": {"type": "string", "enum": ["maiz", "frijol"]},
+                        "sowing_date": {"type": "string", "format": "date"},
+                        "target_date": {"type": "string", "format": "date"},
+                        "lat": {"type": "number"},
+                        "lon": {"type": "number"},
+                        "visible_panel": {"type": "string"},
+                    },
+                    "required": ["crop", "sowing_date", "lat", "lon"],
+                },
+            },
+            {
                 "name": "explainRecommendation",
                 "description": "Convierte una evaluacion de riesgo y contexto oficial en una explicacion breve, clara y accionable para productor o tecnico.",
                 "method": "POST",
@@ -298,11 +378,17 @@ def manifest():
 def call():
     """Generic function-calling endpoint for LLM clients."""
     payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        body, status = _invalid_tool_request("", {}, "JSON body must be an object")
+        return jsonify(body), status
     tool_name = payload.get("tool_name")
     arguments = payload.get("arguments") or {}
 
     if not tool_name:
         return jsonify({"error": "tool_name is required"}), 400
+    if not isinstance(arguments, dict):
+        body, status = _invalid_tool_request(tool_name, {}, "arguments must be an object")
+        return jsonify(body), status
 
     body, status = _call_tool(tool_name, arguments)
     return jsonify(body), status

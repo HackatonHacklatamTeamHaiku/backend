@@ -269,8 +269,10 @@ Compatibility tool layer for assistants.
 Current public semantic tools:
 
 - `getRiskAssessment`
+- `getWeatherObserved`
 - `getOfficialContext`
 - `getPhenologyContext`
+- `buildRuntimeContext`
 - `explainRecommendation`
 
 ---
@@ -323,6 +325,7 @@ Prefer:
 Use:
 
 - `/api/llm/context` when the app wants to pre-compose runtime context itself
+- `buildRuntimeContext` through `/api/v1/ai/tools/call` when a tool-calling assistant needs the same backend-composed runtime context
 
 Avoid:
 

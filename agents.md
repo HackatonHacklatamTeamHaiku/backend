@@ -311,6 +311,7 @@ The generic function-calling interface is:
 The public semantic tool layer includes:
 
 - `getRiskAssessment`
+- `getWeatherObserved`
 - `getOfficialContext`
 - `getPhenologyContext`
 - `explainRecommendation`

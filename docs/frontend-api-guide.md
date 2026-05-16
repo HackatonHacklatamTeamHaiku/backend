@@ -659,11 +659,13 @@ GET /api/v1/ai/tools/manifest
 
 No requiere parámetros.
 
-El backend anuncia 4 tools:
+El backend anuncia 6 tools:
 
 - `getRiskAssessment`
+- `getWeatherObserved`
 - `getOfficialContext`
 - `getPhenologyContext`
+- `buildRuntimeContext`
 - `explainRecommendation`
 
 Uso frontend:
@@ -706,6 +708,18 @@ Ejemplos vigentes:
 }
 ```
 
+### `getWeatherObserved`
+
+```json
+{
+  "tool_name": "getWeatherObserved",
+  "arguments": {
+    "lat": 13.69,
+    "lon": -89.21
+  }
+}
+```
+
 ### `getOfficialContext`
 
 ```json
@@ -726,6 +740,22 @@ Ejemplos vigentes:
     "crop": "maiz",
     "sowing_date": "2026-05-20",
     "target_date": "2026-08-15"
+  }
+}
+```
+
+### `buildRuntimeContext`
+
+```json
+{
+  "tool_name": "buildRuntimeContext",
+  "arguments": {
+    "crop": "maiz",
+    "sowing_date": "2026-05-20",
+    "lat": 13.69,
+    "lon": -89.21,
+    "target_date": "2026-08-15",
+    "visible_panel": "risk_summary"
   }
 }
 ```
@@ -753,7 +783,8 @@ No bases un agente nuevo en tools viejas como:
 - `get_current_features`
 - `get_location_context`
 - `get_agro_advisory`
-- `buildRuntimeContext`
+
+`buildRuntimeContext` si es vigente y debe usarse cuando el agente necesita el contexto completo ya compuesto por backend.
 
 ---
 

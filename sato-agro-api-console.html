@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SATO-Agro API Console</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101512;
+      --panel: #17221b;
+      --panel-2: #1d2b22;
+      --line: #304338;
+      --text: #edf7ef;
+      --muted: #a9b9ad;
+      --accent: #91d16a;
+      --accent-2: #ffd166;
+      --danger: #ff7b72;
+      --ok: #75d99d;
+      --shadow: 0 20px 70px rgba(0, 0, 0, 0.28);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(145, 209, 106, 0.18), transparent 34rem),
+        linear-gradient(135deg, #0d130f 0%, #101512 48%, #162019 100%);
+    }
+
+    header {
+      padding: 32px clamp(18px, 4vw, 52px) 18px;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
+      gap: 18px;
+      padding: 0 clamp(18px, 4vw, 52px) 42px;
+    }
+
+    h1, h2, h3, p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(28px, 5vw, 56px);
+      letter-spacing: -0.055em;
+      line-height: 0.95;
+    }
+
+    h2 {
+      font-size: 16px;
+      letter-spacing: -0.01em;
+    }
+
+    h3 {
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .subtitle {
+      margin-top: 14px;
+      max-width: 760px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: rgba(23, 34, 27, 0.88);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+    }
+
+    .controls {
+      position: sticky;
+      top: 16px;
+      align-self: start;
+      padding: 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      color: var(--text);
+      background: #0f1712;
+      font: inherit;
+      outline: none;
+    }
+
+    input, select {
+      height: 42px;
+      padding: 0 12px;
+    }
+
+    textarea {
+      min-height: 130px;
+      padding: 12px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(145, 209, 106, 0.14);
+    }
+
+    .actions {
+      display: grid;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 15px;
+      min-height: 42px;
+      padding: 10px 13px;
+      color: #0e150f;
+      background: var(--accent);
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 120ms ease, filter 120ms ease, background 120ms ease;
+    }
+
+    button:hover {
+      filter: brightness(1.05);
+      transform: translateY(-1px);
+    }
+
+    button.secondary {
+      color: var(--text);
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+    }
+
+    button.warn {
+      color: #211606;
+      background: var(--accent-2);
+    }
+
+    button:disabled {
+      cursor: wait;
+      filter: grayscale(0.5);
+      opacity: 0.65;
+      transform: none;
+    }
+
+    .results {
+      display: grid;
+      gap: 14px;
+    }
+
+    .result-card {
+      overflow: hidden;
+    }
+
+    .result-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 15px 16px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(29, 43, 34, 0.74);
+    }
+
+    .endpoint {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .endpoint code {
+      color: var(--accent);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .badge {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 9px;
+      color: var(--muted);
+      background: #101812;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .badge.ok {
+      color: #0e150f;
+      border-color: transparent;
+      background: var(--ok);
+    }
+
+    .badge.error {
+      color: #1e0d0b;
+      border-color: transparent;
+      background: var(--danger);
+    }
+
+    .summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 16px 0;
+    }
+
+    .summary span {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: var(--text);
+      background: rgba(16, 24, 18, 0.72);
+      font-size: 12px;
+    }
+
+    pre {
+      margin: 0;
+      padding: 16px;
+      max-height: 520px;
+      overflow: auto;
+      color: #d8f1dd;
+      background: #0b100d;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .toolbox {
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    .hint {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .quick-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .status-line {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 13px;
+      min-height: 20px;
+    }
+
+    @media (max-width: 980px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+
+      .controls {
+        position: static;
+      }
+    }
+
+    @media (max-width: 560px) {
+      header {
+        padding-top: 24px;
+      }
+
+      .grid, .button-row, .quick-list {
+        grid-template-columns: 1fr;
+      }
+
+      .result-head {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .badges {
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SATO-Agro API Console</h1>
+    <p class="subtitle">Interfaz local para consultar rapidamente los endpoints Manifest V2 del backend MVP y probar las tools LLM normalizadas.</p>
+  </header>
+
+  <main>
+    <section class="panel controls" aria-label="Controles de consulta">
+      <h2>Parametros comunes</h2>
+      <p class="hint">Ejecuta el backend con <code>python app.py</code>. Si abres este archivo desde el navegador, CORS ya esta habilitado en Flask.</p>
+
+      <div class="grid">
+        <div class="field full">
+          <label for="baseUrl">Backend base URL</label>
+          <input id="baseUrl" value="http://127.0.0.1:5000" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="crop">Cultivo</label>
+          <select id="crop">
+            <option value="maiz">maiz</option>
+            <option value="frijol">frijol</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="audience">Audiencia</label>
+          <select id="audience">
+            <option value="productor">productor</option>
+            <option value="tecnico">tecnico</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="sowingDate">Fecha siembra</label>
+          <input id="sowingDate" type="date" value="2026-05-20">
+        </div>
+        <div class="field">
+          <label for="targetDate">Fecha objetivo</label>
+          <input id="targetDate" type="date" value="2026-07-15">
+        </div>
+        <div class="field">
+          <label for="lat">Lat</label>
+          <input id="lat" type="number" step="0.000001" value="13.69">
+        </div>
+        <div class="field">
+          <label for="lon">Lon</label>
+          <input id="lon" type="number" step="0.000001" value="-89.21">
+        </div>
+        <div class="field">
+          <label for="municipality">Municipio opcional</label>
+          <input id="municipality" placeholder="Ej. San Salvador">
+        </div>
+        <div class="field">
+          <label for="municipalityCode">Codigo municipio</label>
+          <input id="municipalityCode" placeholder="Opcional">
+        </div>
+        <div class="field full">
+          <label for="canton">Canton opcional</label>
+          <input id="canton" placeholder="Opcional">
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="runAll" class="warn">Consultar todo el MVP</button>
+        <div class="button-row">
+          <button data-action="health" class="secondary">Health</button>
+          <button data-action="observed" class="secondary">Observed</button>
+          <button data-action="forecast" class="secondary">Forecast</button>
+          <button data-action="geo" class="secondary">Geo</button>
+          <button data-action="risk" class="secondary">Risk</button>
+          <button data-action="llmContext" class="secondary">LLM Context</button>
+          <button data-action="llmExplain" class="secondary">LLM Explain</button>
+          <button data-action="toolsManifest" class="secondary">Tools Manifest</button>
+        </div>
+      </div>
+
+      <div class="toolbox">
+        <h2>Tools LLM via /api/v1/ai/tools/call</h2>
+        <p class="hint">Usa los mismos inputs para llamar rapidamente tools como <code>getRiskAssessment</code>, <code>getOfficialContext</code>, <code>getPhenologyContext</code> y <code>explainRecommendation</code>.</p>
+        <div class="quick-list">
+          <button data-tool="getRiskAssessment" class="secondary">getRiskAssessment</button>
+          <button data-tool="getOfficialContext" class="secondary">getOfficialContext</button>
+          <button data-tool="getPhenologyContext" class="secondary">getPhenologyContext</button>
+          <button data-tool="explainRecommendation" class="secondary">explainRecommendation</button>
+        </div>
+      </div>
+
+      <div class="toolbox">
+        <h2>Payload manual para explain</h2>
+        <p class="hint">Opcional. Si lo dejas vacio, el HTML arma el payload desde la ultima respuesta de riesgo.</p>
+        <textarea id="manualExplain" spellcheck="false" placeholder='{"risk_assessment": {...}, "official_context": {...}}'></textarea>
+      </div>
+
+      <div id="statusLine" class="status-line">Listo.</div>
+    </section>
+
+    <section class="results" id="results" aria-live="polite"></section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const results = $("results");
+    const statusLine = $("statusLine");
+    const state = {
+      lastRisk: null,
+      lastRuntimeContext: null,
+      lastOfficialContext: null,
+    };
+
+    const endpointLabels = {
+      health: { method: "GET", path: "/health", title: "Health" },
+      observed: { method: "GET", path: "/api/weather/observed", title: "Weather Observed" },
+      forecast: { method: "GET", path: "/api/weather/forecast", title: "Weather Forecast" },
+      geo: { method: "GET", path: "/api/geo/context", title: "Geo Context" },
+      risk: { method: "GET", path: "/api/risk/assessment", title: "Risk Assessment" },
+      llmContext: { method: "GET", path: "/api/llm/context", title: "LLM Context" },
+      llmExplain: { method: "POST", path: "/api/llm/explain", title: "LLM Explain" },
+      toolsManifest: { method: "GET", path: "/api/v1/ai/tools/manifest", title: "AI Tools Manifest" },
+    };
+
+    function formValues() {
+      return {
+        crop: $("crop").value,
+        sowing_date: $("sowingDate").value,
+        target_date: $("targetDate").value,
+        lat: Number($("lat").value),
+        lon: Number($("lon").value),
+        municipality: $("municipality").value.trim(),
+        municipality_code: $("municipalityCode").value.trim(),
+        canton: $("canton").value.trim(),
+        audience: $("audience").value,
+      };
+    }
+
+    function cleanParams(params) {
+      return Object.fromEntries(
+        Object.entries(params).filter(([, value]) => value !== "" && value !== null && value !== undefined && !Number.isNaN(value))
+      );
+    }
+
+    function commonGeoParams() {
+      const values = formValues();
+      return cleanParams({ lat: values.lat, lon: values.lon });
+    }
+
+    function fullRiskParams() {
+      const values = formValues();
+      return cleanParams({
+        crop: values.crop,
+        sowing_date: values.sowing_date,
+        target_date: values.target_date,
+        lat: values.lat,
+        lon: values.lon,
+        municipality: values.municipality,
+        municipality_code: values.municipality_code,
+        canton: values.canton,
+      });
+    }
+
+    function paramsFor(action) {
+      const values = formValues();
+      if (action === "observed") return commonGeoParams();
+      if (action === "forecast") return cleanParams({ ...commonGeoParams(), target_date: values.target_date });
+      if (action === "geo") {
+        return cleanParams({
+          ...commonGeoParams(),
+          target_date: values.target_date,
+          municipality: values.municipality,
+          municipality_code: values.municipality_code,
+          canton: values.canton,
+        });
+      }
+      if (action === "risk" || action === "llmContext") return fullRiskParams();
+      return {};
+    }
+
+    function makeUrl(path, params = {}) {
+      const base = $("baseUrl").value.replace(/\/+$/, "");
+      const url = new URL(path, `${base}/`);
+      Object.entries(cleanParams(params)).forEach(([key, value]) => url.searchParams.set(key, value));
+      return url;
+    }
+
+    function setBusy(isBusy) {
+      document.querySelectorAll("button").forEach((button) => button.disabled = isBusy);
+      statusLine.textContent = isBusy ? "Consultando backend..." : "Listo.";
+    }
+
+    function createCard(key, config) {
+      let card = document.querySelector(`[data-result="${key}"]`);
+      if (card) return card;
+
+      card = document.createElement("article");
+      card.className = "panel result-card";
+      card.dataset.result = key;
+      card.innerHTML = `
+        <div class="result-head">
+          <div class="endpoint">
+            <h2>${config.title}</h2>
+            <code>${config.method} ${config.path}</code>
+          </div>
+          <div class="badges">
+            <span class="badge" data-role="status">Pendiente</span>
+            <span class="badge" data-role="time">0 ms</span>
+          </div>
+        </div>
+        <div class="summary" data-role="summary"></div>
+        <pre data-role="body">Sin consulta todavia.</pre>
+      `;
+      results.prepend(card);
+      return card;
+    }
+
+    function setCardLoading(key, config, urlOrPath) {
+      const card = createCard(key, config);
+      card.querySelector('[data-role="status"]').className = "badge";
+      card.querySelector('[data-role="status"]').textContent = "Cargando";
+      card.querySelector('[data-role="time"]').textContent = "...";
+      card.querySelector('[data-role="summary"]').innerHTML = "";
+      card.querySelector('[data-role="body"]').textContent = `${config.method} ${urlOrPath}`;
+    }
+
+    function summarize(data) {
+      const payload = data && (data.data || data.result || data);
+      const chips = [];
+      if (!payload || typeof payload !== "object") return chips;
+
+      if (payload.risk_level) chips.push(`riesgo: ${payload.risk_level}`);
+      if (payload.risk_score !== undefined) chips.push(`score: ${payload.risk_score}`);
+      if (payload.confidence) chips.push(`confianza: ${payload.confidence}`);
+      if (payload.horizon) chips.push(`horizonte: ${payload.horizon}`);
+      if (payload.plant_state && payload.plant_state.phase_code) chips.push(`fase: ${payload.plant_state.phase_code}`);
+      if (payload.source_type) chips.push(`tipo: ${payload.source_type}`);
+      if (payload.target_date) chips.push(`target: ${payload.target_date}`);
+      if (payload.municipality) chips.push(`municipio: ${payload.municipality}`);
+      if (payload.summary) chips.push(payload.summary);
+      if (payload.official_context && payload.official_context.canicula_2026_watch !== undefined) {
+        chips.push(`canicula 2026: ${payload.official_context.canicula_2026_watch ? "si" : "no"}`);
+      }
+      return chips.slice(0, 6);
+    }
+
+    function renderResult(key, config, result) {
+      const card = createCard(key, config);
+      const ok = result.ok;
+      const status = card.querySelector('[data-role="status"]');
+      status.className = `badge ${ok ? "ok" : "error"}`;
+      status.textContent = `${result.status || "ERR"}`;
+      card.querySelector('[data-role="time"]').textContent = `${result.elapsedMs} ms`;
+      card.querySelector('[data-role="summary"]').innerHTML = summarize(result.body)
+        .map((text) => `<span>${escapeHtml(String(text))}</span>`)
+        .join("");
+      card.querySelector('[data-role="body"]').textContent = JSON.stringify({
+        request: result.request,
+        response: result.body,
+      }, null, 2);
+    }
+
+    function escapeHtml(value) {
+      return value.replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[char]));
+    }
+
+    async function requestJSON(key, config, { params = {}, body = null } = {}) {
+      const url = makeUrl(config.path, params);
+      const requestInfo = { method: config.method, url: url.toString() };
+      if (body) requestInfo.body = body;
+      setCardLoading(key, config, url.toString());
+
+      const started = performance.now();
+      try {
+        const response = await fetch(url, {
+          method: config.method,
+          headers: body ? { "Content-Type": "application/json" } : undefined,
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        const contentType = response.headers.get("content-type") || "";
+        const parsed = contentType.includes("application/json") ? await response.json() : await response.text();
+        const result = {
+          ok: response.ok,
+          status: response.status,
+          elapsedMs: Math.round(performance.now() - started),
+          request: requestInfo,
+          body: parsed,
+        };
+        rememberResult(key, parsed);
+        renderResult(key, config, result);
+        return result;
+      } catch (error) {
+        const result = {
+          ok: false,
+          status: "FETCH_ERROR",
+          elapsedMs: Math.round(performance.now() - started),
+          request: requestInfo,
+          body: { error: error.message },
+        };
+        renderResult(key, config, result);
+        return result;
+      }
+    }
+
+    function rememberResult(key, parsed) {
+      if (key === "risk" || key === "tool:getRiskAssessment") state.lastRisk = parsed.data || parsed.result || parsed;
+      if (key === "llmContext" || key === "tool:buildRuntimeContext") state.lastRuntimeContext = parsed.data || parsed.result || parsed;
+      const payload = parsed.data || parsed.result || parsed;
+      if (payload && payload.official_context) state.lastOfficialContext = payload.official_context;
+      if (key === "tool:getOfficialContext") state.lastOfficialContext = payload;
+    }
+
+    function buildExplainPayload() {
+      const manual = $("manualExplain").value.trim();
+      if (manual) return JSON.parse(manual);
+
+      const risk = state.lastRisk;
+      if (!risk) return null;
+      return {
+        risk_assessment: {
+          risk_score: risk.risk_score,
+          risk_level: risk.risk_level,
+          confidence: risk.confidence,
+          risk_factors: risk.risk_factors || [],
+          risk_overrides: risk.risk_overrides || [],
+          secondary_alerts: risk.secondary_alerts || [],
+        },
+        official_context: risk.official_context || state.lastOfficialContext || {},
+        plant_state: risk.plant_state || {},
+        recommendations: risk.recommendations || [],
+        audience: formValues().audience,
+      };
+    }
+
+    async function ensureRisk() {
+      if (state.lastRisk) return state.lastRisk;
+      const result = await requestJSON("risk", endpointLabels.risk, { params: paramsFor("risk") });
+      return result.body && (result.body.data || result.body.result || result.body);
+    }
+
+    async function runAction(action) {
+      if (action === "llmExplain") {
+        await ensureRisk();
+        const payload = buildExplainPayload();
+        if (!payload) throw new Error("No hay risk_assessment para explicar.");
+        return requestJSON(action, endpointLabels[action], { body: payload });
+      }
+      return requestJSON(action, endpointLabels[action], { params: paramsFor(action) });
+    }
+
+    function toolArguments(toolName) {
+      const values = formValues();
+      if (toolName === "getRiskAssessment") return fullRiskParams();
+      if (toolName === "getOfficialContext") return cleanParams({ lat: values.lat, lon: values.lon, target_date: values.target_date });
+      if (toolName === "getPhenologyContext") return cleanParams({ crop: values.crop, sowing_date: values.sowing_date, target_date: values.target_date });
+      if (toolName === "explainRecommendation") return buildExplainPayload();
+      return {};
+    }
+
+    async function runTool(toolName) {
+      if (toolName === "explainRecommendation") await ensureRisk();
+      const args = toolArguments(toolName);
+      if (!args) throw new Error("No hay payload para explainRecommendation.");
+      const config = { method: "POST", path: "/api/v1/ai/tools/call", title: `Tool ${toolName}` };
+      return requestJSON(`tool:${toolName}`, config, { body: { tool_name: toolName, arguments: args } });
+    }
+
+    async function runAll() {
+      setBusy(true);
+      try {
+        await Promise.all([
+          runAction("health"),
+          runAction("observed"),
+          runAction("forecast"),
+          runAction("geo"),
+          runAction("risk"),
+          runAction("llmContext"),
+          runAction("toolsManifest"),
+        ]);
+        await runAction("llmExplain");
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    document.querySelectorAll("[data-action]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        setBusy(true);
+        try {
+          await runAction(button.dataset.action);
+        } catch (error) {
+          statusLine.textContent = error.message;
+        } finally {
+          setBusy(false);
+        }
+      });
+    });
+
+    document.querySelectorAll("[data-tool]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        setBusy(true);
+        try {
+          await runTool(button.dataset.tool);
+        } catch (error) {
+          statusLine.textContent = error.message;
+        } finally {
+          setBusy(false);
+        }
+      });
+    });
+
+    $("runAll").addEventListener("click", runAll);
+
+    createCard("welcome", { method: "INFO", path: "Manifest V2", title: "Uso rapido" })
+      .querySelector('[data-role="body"]').textContent = [
+        "1. Levanta el backend: python app.py",
+        "2. Ajusta cultivo, fecha de siembra, ubicacion y fecha objetivo.",
+        "3. Presiona Consultar todo el MVP o prueba endpoints individuales.",
+        "4. Para POST /api/llm/explain puedes usar el payload automatico desde Risk o pegar uno manual.",
+      ].join("\n");
+  </script>
+</body>
+</html>

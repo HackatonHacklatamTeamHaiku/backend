@@ -10,6 +10,7 @@ Or:
 
 from __future__ import annotations
 
+import atexit
 import logging
 import sys
 
@@ -27,6 +28,16 @@ def create_app() -> Flask:
     # Enable CORS so the frontend can call the API from any origin
     CORS(app)
 
+    # ── Database (Supabase PostgreSQL) ────────────────────────
+    from services.database import init_pool, close_pool
+    if app.config.get("DATABASE_URL"):
+        try:
+            init_pool(app.config["DATABASE_URL"])
+        except Exception:
+            app.logger.warning("Database pool init failed — DB features disabled")
+        else:
+            atexit.register(close_pool)
+
     # ── Logging ──────────────────────────────────────────────
     logging.basicConfig(
         level=logging.INFO,
@@ -36,20 +47,20 @@ def create_app() -> Flask:
 
     # ── Register blueprints ──────────────────────────────────
     from routes.health import bp as health_bp
-    from routes.observations import bp as observations_bp
-    from routes.forecasts import bp as forecasts_bp
-    from routes.agro import bp as agro_bp
-    from routes.dashboard import bp as dashboard_bp
     from routes.canonical import bp as canonical_bp
     from routes.ai_tools import bp as ai_tools_bp
+    from routes.weather import bp as weather_bp
+    from routes.geo import bp as geo_bp
+    from routes.risk import bp as risk_bp
+    from routes.llm import bp as llm_bp
 
     app.register_blueprint(health_bp)
-    app.register_blueprint(observations_bp)
-    app.register_blueprint(forecasts_bp)
-    app.register_blueprint(agro_bp)
-    app.register_blueprint(dashboard_bp)
     app.register_blueprint(canonical_bp)
     app.register_blueprint(ai_tools_bp)
+    app.register_blueprint(weather_bp)
+    app.register_blueprint(geo_bp)
+    app.register_blueprint(risk_bp)
+    app.register_blueprint(llm_bp)
 
     # ── Root redirect ────────────────────────────────────────
     @app.route("/")
@@ -59,16 +70,13 @@ def create_app() -> Flask:
             "version": "1.0.0",
             "endpoints": [
                 "/health",
-                "/api/v1/observations/current",
-                "/api/v1/observations/nearest?lat=&lon=",
-                "/api/v1/forecast/48h",
-                "/api/v1/forecast/weekly",
-                "/api/v1/agro/latest",
-                "/api/v1/dashboard/summary?lat=&lon=",
-                "/api/v1/stations",
-                "/api/v1/features/current",
+                "/api/weather/observed?lat=&lon=",
+                "/api/weather/forecast?lat=&lon=&target_date=",
+                "/api/geo/context?lat=&lon=",
+                "/api/risk/assessment?crop=&sowing_date=&lat=&lon=",
+                "/api/llm/context",
+                "/api/llm/explain",
                 "/api/v1/documents/latest",
-                "/api/v1/context/location?lat=&lon=",
                 "/api/v1/ai/tools/manifest",
                 "/api/v1/ai/tools/call",
             ],

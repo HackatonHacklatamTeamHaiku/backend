@@ -1,28 +1,17 @@
 """
-Canonical backend routes shared by the frontend, ML pipeline, and AI tools.
+Canonical document route plus shared helpers for AI tools and backend composition.
 """
 
 from __future__ import annotations
 
 import logging
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 
 from config import Config
-from models.schemas import (
-    CanonicalLocationContext,
-    DocumentRecord,
-    Location,
-    ResponseMeta,
-    to_dict,
-)
+from models.schemas import to_dict
 from normalizers.agro import normalize_pdf
-from normalizers.canonical import (
-    feature_row_from_observation,
-    forecast_document_from_payload,
-    pdf_document_from_payload,
-    station_from_observation,
-)
+from normalizers.canonical import forecast_document_from_payload, pdf_document_from_payload
 from normalizers.forecasts import normalize_48h
 from normalizers.observations import extract_station_ids, merge_observations
 from services import (
@@ -34,7 +23,6 @@ from services import (
     snet_wind,
 )
 from utils.cache import DataCache
-from utils.geo import find_nearest
 from utils.time import now_utc_iso
 
 logger = logging.getLogger(__name__)
@@ -160,73 +148,6 @@ def _get_agro_document() -> tuple[dict | None, bool, str]:
         return None, False, now_utc_iso()
 
 
-@bp.route("/stations")
-def stations():
-    """Return canonical station records."""
-    station_id = request.args.get("station_id", type=int)
-    station_name = request.args.get("station_name", type=str)
-
-    observations, stale, fetched_at = _get_observations()
-    records = [to_dict(station_from_observation(obs)) for obs in observations]
-
-    if station_id is not None:
-        records = [row for row in records if row.get("station_id") == station_id]
-    if station_name:
-        search = station_name.strip().lower()
-        records = [
-            row for row in records
-            if search in (row.get("station_name") or "").lower()
-            or search in (row.get("station_code") or "").lower()
-        ]
-
-    return jsonify({
-        "data": records,
-        "meta": _build_meta(
-            cached=_cache_obs.get()[0] is not None,
-            stale=stale,
-            upstream_status="failed" if stale else "ok",
-            fetched_at=fetched_at,
-        ),
-    })
-
-
-@bp.route("/features/current")
-def current_features():
-    """Return flattened current observation features for ML and UI consumers."""
-    station_id = request.args.get("station_id", type=int)
-    station_name = request.args.get("station_name", type=str)
-    lat = request.args.get("lat", type=float)
-    lon = request.args.get("lon", type=float)
-
-    observations, stale, fetched_at = _get_observations()
-
-    if lat is not None and lon is not None and observations:
-        nearest = find_nearest(lat, lon, observations)
-        rows = [to_dict(feature_row_from_observation(nearest))] if nearest else []
-    else:
-        rows = [to_dict(feature_row_from_observation(obs)) for obs in observations]
-
-    if station_id is not None:
-        rows = [row for row in rows if row.get("station_id") == station_id]
-    if station_name:
-        search = station_name.strip().lower()
-        rows = [
-            row for row in rows
-            if search in (row.get("station_name") or "").lower()
-            or search in (row.get("station_code") or "").lower()
-        ]
-
-    return jsonify({
-        "data": rows,
-        "meta": _build_meta(
-            cached=_cache_obs.get()[0] is not None,
-            stale=stale,
-            upstream_status="failed" if stale else "ok",
-            fetched_at=fetched_at,
-        ),
-    })
-
-
 @bp.route("/documents/latest")
 def latest_documents():
     """Return canonical latest forecast and bulletin document records."""
@@ -253,43 +174,3 @@ def latest_documents():
             fetched_at=latest_fetched_at,
         ),
     })
-
-
-@bp.route("/context/location")
-def location_context():
-    """Return one canonical context bundle for a target location."""
-    lat = request.args.get("lat", type=float)
-    lon = request.args.get("lon", type=float)
-
-    if lat is None or lon is None:
-        return jsonify({"error": "lat and lon query parameters are required"}), 400
-
-    observations, obs_stale, obs_fetched_at = _get_observations()
-    forecast_doc, forecast_stale, forecast_fetched_at = _get_forecast_document()
-    weekly_doc, weekly_stale, weekly_fetched_at = _get_weekly_document()
-    agro_doc, agro_stale, agro_fetched_at = _get_agro_document()
-
-    nearest = find_nearest(lat, lon, observations) if observations else None
-    documents = [doc for doc in (forecast_doc, weekly_doc, agro_doc) if doc is not None]
-
-    fetched_at = max(
-        [ts for ts in (obs_fetched_at, forecast_fetched_at, weekly_fetched_at, agro_fetched_at) if ts],
-        default=now_utc_iso(),
-    )
-    any_stale = obs_stale or forecast_stale or weekly_stale or agro_stale
-
-    payload = CanonicalLocationContext(
-        location=Location(lat=lat, lon=lon),
-        station=station_from_observation(nearest) if nearest else None,
-        observation=nearest,
-        features=feature_row_from_observation(nearest) if nearest else None,
-        documents=[DocumentRecord(**doc) for doc in documents],
-        meta=ResponseMeta(
-            cached=True,
-            stale=any_stale,
-            upstream_status="degraded" if any_stale else "ok",
-            fetched_at=fetched_at,
-        ),
-    )
-
-    return jsonify(to_dict(payload))

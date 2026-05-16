@@ -169,3 +169,85 @@ class CanonicalLocationContext:
     features: Optional[ObservationFeatureRow] = None
     documents: list[DocumentRecord] = field(default_factory=list)
     meta: ResponseMeta = field(default_factory=ResponseMeta)
+
+
+# ── Agro Advisory ────────────────────────────────────────────
+
+@dataclass
+class PlantSusceptibility:
+    water: float = 0.0
+    heat: float = 0.0
+    evaporation: float = 0.0
+    soil: float = 0.0
+    seasonal: float = 0.0
+
+
+@dataclass
+class PlantState:
+    crop: str = ""
+    days_after_sowing: int = 0
+    phase: str = ""
+    phase_code: str = ""
+    ui_phase_group: Optional[str] = None
+    susceptibility: PlantSusceptibility = field(default_factory=PlantSusceptibility)
+
+
+@dataclass
+class ClimateState:
+    rain: str = ""
+    temperature: str = ""
+    wind_evaporation: str = ""
+    soil: str = ""
+    seasonal: str = ""
+    rain_sum_mm: Optional[float] = None
+    et0_sum_mm: Optional[float] = None
+    days_window: Optional[int] = None
+    dry_days: Optional[int] = None
+    temp_max_c: Optional[float] = None
+    wind_max_kmh: Optional[float] = None
+    et0_mm_day: Optional[float] = None
+    canicula_watch: bool = False
+
+
+@dataclass
+class RiskFactorDetail:
+    id: str = ""
+    label: str = ""
+    climate_value: float = 0.0
+    plant_susceptibility: float = 0.0
+    weight: float = 0.0
+    contribution: float = 0.0
+    state: str = ""
+    evidence: Optional[str] = None
+
+
+@dataclass
+class RiskOverride:
+    id: str = ""
+    reason: str = ""
+
+
+@dataclass
+class SecondaryAlert:
+    id: str = ""
+    level: str = ""
+    message: str = ""
+
+
+@dataclass
+class AgroRiskAssessment:
+    target_date: str = ""
+    horizon: str = ""
+    confidence: str = ""
+    plant_state: PlantState = field(default_factory=PlantState)
+    climate_state: ClimateState = field(default_factory=ClimateState)
+    risk_factors: list[RiskFactorDetail] = field(default_factory=list)
+    risk_score: float = 0.0
+    risk_level_base: str = ""
+    risk_level: str = ""
+    risk_overrides: list[RiskOverride] = field(default_factory=list)
+    recommendations: list[str] = field(default_factory=list)
+    secondary_alerts: list[SecondaryAlert] = field(default_factory=list)
+    sources_used: list[str] = field(default_factory=list)
+    assumptions: list[str] = field(default_factory=list)
+    input_warnings: list[str] = field(default_factory=list)

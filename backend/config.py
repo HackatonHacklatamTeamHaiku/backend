@@ -5,6 +5,13 @@ Centralizes all tunables: upstream URLs, cache TTLs, HTTP defaults.
 """
 
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load .env from the backend package directory
+_env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(_env_path)
 
 
 class Config:
@@ -22,6 +29,24 @@ class Config:
     SNET_WIND_URL = (
         "https://geoportal.snet.gob.sv/server/rest/services/"
         "viento_promedio_2horas/FeatureServer/0/query"
+    )
+    SNET_RAINFALL_URL = (
+        "https://www.snet.gob.sv/googlemaps/arcgis/google/lluvia_data_24h.php"
+    )
+    SNET_SOIL_URL = (
+        "https://geoportal.snet.gob.sv/server/rest/services/clima/"
+        "servicio_suelos_pais/MapServer/5/query"
+    )
+    SNET_BASINS_URL = (
+        "https://www.snet.gob.sv/googlemaps/arcgis/google/datos_cuencas.php"
+    )
+    SNET_CLIMATE_OUTLOOK_URL_TEMPLATE = (
+        "https://geoportal.snet.gob.sv/server/rest/services/clima/"
+        "perspectivas_clima_servicio/MapServer/{layer_id}/query"
+    )
+    SNET_MUNICIPAL_BOUNDARIES_URL = (
+        "https://geoportal.snet.gob.sv/server/rest/services/"
+        "ExposicionASequia/MapServer/0/query"
     )
     SNET_STATION_DETAIL_URL = (
         "https://www.snet.gob.sv/Geologia/pcbase2/listado.php"
@@ -42,7 +67,18 @@ class Config:
 
     # ── Cache TTLs (seconds) ─────────────────────────────────
     CACHE_TTL_OBSERVATIONS = int(os.getenv("CACHE_TTL_OBSERVATIONS", "600"))       # 10 min
+    CACHE_TTL_RAINFALL = int(os.getenv("CACHE_TTL_RAINFALL", "7200"))              # 2 hours
+    CACHE_TTL_SOIL = int(os.getenv("CACHE_TTL_SOIL", "86400"))                     # 24 hours
+    CACHE_TTL_BASINS = int(os.getenv("CACHE_TTL_BASINS", "86400"))                 # 24 hours
+    CACHE_TTL_CLIMATE_OUTLOOK = int(os.getenv("CACHE_TTL_CLIMATE_OUTLOOK", "21600"))  # 6 hours
+    CACHE_TTL_FORECAST_DAILY = int(os.getenv("CACHE_TTL_FORECAST_DAILY", "3600"))  # 1 hour
+    CACHE_TTL_MUNICIPALITY_LOOKUP = int(os.getenv("CACHE_TTL_MUNICIPALITY_LOOKUP", "86400"))  # 24 hours
     CACHE_TTL_STATION_METADATA = int(os.getenv("CACHE_TTL_STATION_METADATA", "86400"))  # 24 hours
     CACHE_TTL_FORECAST_48H = int(os.getenv("CACHE_TTL_FORECAST_48H", "1800"))      # 30 min
     CACHE_TTL_WEEKLY_PDF = int(os.getenv("CACHE_TTL_WEEKLY_PDF", "21600"))          # 6 hours
     CACHE_TTL_AGRO_PDF = int(os.getenv("CACHE_TTL_AGRO_PDF", "21600"))             # 6 hours
+
+    # ── Database (Supabase PostgreSQL) ────────────────────────
+    DATABASE_URL = os.getenv("DATABASE_URL", "")
+    SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+

@@ -10,6 +10,14 @@ from flask import Blueprint, jsonify, request
 
 from models.schemas import CanonicalLocationContext, DocumentRecord, Location, ResponseMeta, to_dict
 from normalizers.canonical import feature_row_from_observation, station_from_observation
+from routes.agro import build_advisory_payload
+from services.manifest_context import (
+    build_runtime_llm_context,
+    explain_recommendation,
+    get_official_context,
+    get_phenology_context,
+    get_risk_assessment,
+)
 from routes.canonical import (
     _build_meta,
     _get_agro_document,
@@ -160,6 +168,53 @@ def _call_tool(tool_name: str, arguments: dict) -> tuple[dict, int]:
         result, meta = _location_context(float(lat), float(lon))
         return {"tool_name": tool_name, "arguments": arguments, "result": result, "meta": meta}, 200
 
+    if tool_name == "get_agro_advisory":
+        result, meta, status = build_advisory_payload(arguments)
+        body = {"tool_name": tool_name, "arguments": arguments, "result": result, "meta": meta}
+        if status >= 400:
+            body["error"] = result.get("error")
+        return body, status
+
+    if tool_name == "getRiskAssessment":
+        result, meta, status = get_risk_assessment(arguments)
+        body = {"tool_name": tool_name, "arguments": arguments, "result": result, "meta": meta}
+        if status >= 400:
+            body["error"] = result.get("error")
+        return body, status
+
+    if tool_name == "getOfficialContext":
+        target_date = arguments.get("target_date")
+        if not target_date:
+            return {"tool_name": tool_name, "arguments": arguments, "error": "target_date is required"}, 400
+        from datetime import datetime
+
+        result = get_official_context(datetime.strptime(target_date, "%Y-%m-%d").date())
+        return {"tool_name": tool_name, "arguments": arguments, "result": result, "meta": {"cached": True, "stale": False, "upstream_status": "ok", "fetched_at": now_utc_iso()}}, 200
+
+    if tool_name == "getPhenologyContext":
+        crop = arguments.get("crop")
+        sowing_date = arguments.get("sowing_date")
+        if not crop or not sowing_date:
+            return {"tool_name": tool_name, "arguments": arguments, "error": "crop and sowing_date are required"}, 400
+        result = get_phenology_context(crop, sowing_date, arguments.get("target_date"))
+        return {"tool_name": tool_name, "arguments": arguments, "result": result, "meta": {"cached": True, "stale": False, "upstream_status": "ok", "fetched_at": now_utc_iso()}}, 200
+
+    if tool_name == "buildRuntimeContext":
+        result, meta, status = build_runtime_llm_context(arguments)
+        body = {"tool_name": tool_name, "arguments": arguments, "result": result, "meta": meta}
+        if status >= 400:
+            body["error"] = result.get("error")
+        return body, status
+
+    if tool_name == "explainRecommendation":
+        result = explain_recommendation(arguments)
+        return {
+            "tool_name": tool_name,
+            "arguments": arguments,
+            "result": result,
+            "meta": {"cached": True, "stale": False, "upstream_status": "ok", "fetched_at": now_utc_iso()},
+        }, 200
+
     return {"error": f"Unknown tool_name: {tool_name}"}, 404
 
 
@@ -224,6 +279,111 @@ def manifest():
                     "properties": {
                         "lat": {"type": "number"},
                         "lon": {"type": "number"},
+                    },
+                },
+            },
+            {
+                "name": "get_agro_advisory",
+                "description": "Estimate crop phase, explainable agroclimatic risk, and preventive recommendations for maize or bean.",
+                "method": "POST",
+                "endpoint": "/api/v1/ai/tools/call",
+                "input_schema": {
+                    "type": "object",
+                    "required": ["crop", "sowing_date", "lat", "lon"],
+                    "properties": {
+                        "crop": {"type": "string", "enum": ["maiz", "frijol"]},
+                        "sowing_date": {"type": "string", "format": "date"},
+                        "target_date": {"type": "string", "format": "date"},
+                        "lat": {"type": "number"},
+                        "lon": {"type": "number"},
+                        "rain_sum_mm": {"type": "number"},
+                        "et0_sum_mm": {"type": "number"},
+                        "days_window": {"type": "integer"},
+                        "dry_days": {"type": "integer"},
+                        "temp_max_c": {"type": "number"},
+                        "wind_max_kmh": {"type": "number"},
+                        "et0_mm_day": {"type": "number"},
+                        "soil": {
+                            "type": "string",
+                            "enum": ["favorable", "neutral", "unfavorable"],
+                        },
+                        "seasonal": {
+                            "type": "string",
+                            "enum": [
+                                "arriba_lo_normal",
+                                "normal",
+                                "bajo_lo_normal",
+                                "canicula_o_sequia_fuerte",
+                            ],
+                        },
+                        "canicula_watch": {"type": "boolean"},
+                    },
+                },
+            },
+            {
+                "name": "getRiskAssessment",
+                "description": "Manifest-aligned risk assessment for maize or bean using observed, forecast, geo, and official context.",
+                "method": "POST",
+                "endpoint": "/api/v1/ai/tools/call",
+                "input_schema": {
+                    "type": "object",
+                    "required": ["crop", "sowing_date", "lat", "lon"],
+                    "properties": {
+                        "crop": {"type": "string", "enum": ["maiz", "frijol"]},
+                        "sowing_date": {"type": "string", "format": "date"},
+                        "target_date": {"type": "string", "format": "date"},
+                        "lat": {"type": "number"},
+                        "lon": {"type": "number"},
+                        "municipality": {"type": "string"},
+                        "municipality_code": {"type": "string"},
+                        "canton": {"type": "string"},
+                    },
+                },
+            },
+            {
+                "name": "getOfficialContext",
+                "description": "Return official 2026 canicula context and seasonal explanation snippets.",
+                "method": "POST",
+                "endpoint": "/api/v1/ai/tools/call",
+                "input_schema": {
+                    "type": "object",
+                    "required": ["target_date"],
+                    "properties": {
+                        "lat": {"type": "number"},
+                        "lon": {"type": "number"},
+                        "target_date": {"type": "string", "format": "date"},
+                    },
+                },
+            },
+            {
+                "name": "getPhenologyContext",
+                "description": "Return estimated phase and uncertainty from crop plus sowing date.",
+                "method": "POST",
+                "endpoint": "/api/v1/ai/tools/call",
+                "input_schema": {
+                    "type": "object",
+                    "required": ["crop", "sowing_date"],
+                    "properties": {
+                        "crop": {"type": "string", "enum": ["maiz", "frijol"]},
+                        "sowing_date": {"type": "string", "format": "date"},
+                        "target_date": {"type": "string", "format": "date"},
+                    },
+                },
+            },
+            {
+                "name": "explainRecommendation",
+                "description": "Turn risk assessment plus official context into a simple explanation for the producer or extension team.",
+                "method": "POST",
+                "endpoint": "/api/v1/ai/tools/call",
+                "input_schema": {
+                    "type": "object",
+                    "required": ["risk_assessment"],
+                    "properties": {
+                        "risk_assessment": {"type": "object"},
+                        "official_context": {"type": "object"},
+                        "plant_state": {"type": "object"},
+                        "recommendations": {"type": "array"},
+                        "audience": {"type": "string"},
                     },
                 },
             },

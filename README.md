@@ -55,19 +55,15 @@ The backend **proxies, normalizes, and caches** all upstream data so the fronten
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/health` | Health check |
-| `GET` | `/api/v1/observations/current` | All station observations |
-| `GET` | `/api/v1/observations/current?station_id=4` | Single station |
-| `GET` | `/api/v1/observations/nearest?lat=13.69&lon=-89.21` | Nearest station |
-| `GET` | `/api/v1/forecast/48h` | 48-hour forecast |
-| `GET` | `/api/v1/forecast/weekly` | Weekly forecast PDF metadata |
-| `GET` | `/api/v1/agro/latest` | Latest agro bulletin PDF metadata |
-| `GET` | `/api/v1/dashboard/summary?lat=13.69&lon=-89.21` | **Combined MVP payload** |
-| `GET` | `/api/v1/stations` | Canonical station directory |
-| `GET` | `/api/v1/features/current` | Flattened current features for frontend + LLM |
-| `GET` | `/api/v1/documents/latest` | Latest forecast and bulletin documents |
-| `GET` | `/api/v1/context/location?lat=13.69&lon=-89.21` | Canonical location context bundle |
-| `GET` | `/api/v1/ai/tools/manifest` | LLM tool manifest |
-| `POST` | `/api/v1/ai/tools/call` | Generic LLM function-calling endpoint |
+| `GET` | `/api/weather/observed?lat=13.69&lon=-89.21` | Manifest-aligned observed weather bundle |
+| `GET` | `/api/weather/forecast?lat=13.69&lon=-89.21&target_date=2026-05-20` | Manifest-aligned Open-Meteo forecast bundle |
+| `GET` | `/api/geo/context?lat=13.69&lon=-89.21` | Manifest-aligned geo context bundle |
+| `GET` | `/api/risk/assessment?crop=maiz&sowing_date=2026-05-20&lat=13.69&lon=-89.21` | Manifest-aligned explainable risk assessment |
+| `GET` | `/api/llm/context?...` | Runtime LLM context contract |
+| `POST` | `/api/llm/explain` | Backend-generated plain-language explanation |
+| `GET` | `/api/v1/documents/latest` | Compatibility route for latest forecast and bulletin documents |
+| `GET` | `/api/v1/ai/tools/manifest` | Compatibility LLM tool manifest |
+| `POST` | `/api/v1/ai/tools/call` | Compatibility generic function-calling endpoint |
 
 ---
 
@@ -100,14 +96,30 @@ python app.py
 
 Server starts at **http://127.0.0.1:5000**
 
+### Supabase
+
+The backend reads `DATABASE_URL` from [backend/.env](/C:/Users/brite/OneDrive/Documents/SATOAGRO/backend/backend/.env). For Supabase on an IPv4 network, use the Session Pooler connection string.
+
+Apply the schema to the cloud database:
+
+```bash
+python backend/scripts/apply_migrations.py
+```
+
+Verify the mounted database:
+
+```bash
+python backend/scripts/verify_database.py
+```
+
 ### Test
 
 ```bash
 # Health check
 curl http://127.0.0.1:5000/health
 
-# Dashboard summary (the MVP endpoint)
-curl "http://127.0.0.1:5000/api/v1/dashboard/summary?lat=13.69&lon=-89.21"
+# Risk assessment
+curl "http://127.0.0.1:5000/api/risk/assessment?crop=maiz&sowing_date=2026-05-20&lat=13.69&lon=-89.21&target_date=2026-08-15"
 ```
 
 ---
@@ -152,11 +164,11 @@ ClimateAi/
     │   └── canonical.py                # Shared frontend + AI records
     ├── routes/
     │   ├── health.py                   # /health
-    │   ├── observations.py             # /api/v1/observations/*
-    │   ├── forecasts.py                # /api/v1/forecast/*
-    │   ├── agro.py                     # /api/v1/agro/*
-    │   ├── dashboard.py                # /api/v1/dashboard/summary
-    │   ├── canonical.py                # /api/v1/stations, /features, /documents, /context
+    │   ├── weather.py                  # /api/weather/*
+    │   ├── geo.py                      # /api/geo/context
+    │   ├── risk.py                     # /api/risk/assessment
+    │   ├── llm.py                      # /api/llm/*
+    │   ├── canonical.py                # /api/v1/documents/latest
     │   └── ai_tools.py                 # /api/v1/ai/tools/*
     ├── utils/
     │   ├── http.py                     # Shared session with retries

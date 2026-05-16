@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "SATO-Agro Backend",
-    "description": "Trimmed API collection for the SATO-Agro backend.\n\nPrimary routes live under /api/weather, /api/geo, /api/risk, and /api/llm.\nCompatibility routes are kept only for /api/v1/documents/latest and the 4 semantic AI tools announced by the backend manifest.\n\nBase URL: http://127.0.0.1:5000\n\nTest coordinates: San Salvador (lat=13.69, lon=-89.21)",
+    "description": "Trimmed API collection for the SATO-Agro backend.\n\nPrimary routes live under /api/weather, /api/geo, /api/risk, and /api/llm.\nThe preferred chat contract is POST /api/llm/chat, where frontend may send a model and the backend keeps OpenRouter fallback routing to mistralai/mistral-medium-3.1.\nCompatibility routes are kept only for /api/v1/documents/latest and the 4 semantic AI tools announced by the backend manifest.\n\nBase URL: http://127.0.0.1:5000\n\nTest coordinates: San Salvador (lat=13.69, lon=-89.21)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -28,6 +28,10 @@
     {
       "key": "target_date",
       "value": "2026-08-15"
+    },
+    {
+      "key": "model",
+      "value": "mistralai/mistral-medium-3.1"
     }
   ],
   "item": [
@@ -277,6 +281,34 @@
           }
         },
         {
+          "name": "LLM Chat",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/llm/chat",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "llm",
+                "chat"
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"como va mi maiz\",\n  \"model\": \"{{model}}\",\n  \"crop\": \"{{crop}}\",\n  \"sowing_date\": \"{{sowing_date}}\",\n  \"lat\": {{lat}},\n  \"lon\": {{lon}},\n  \"target_date\": \"{{target_date}}\",\n  \"conversation\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"sembré en mayo\"\n    }\n  ]\n}"
+            },
+            "description": "Preferred backend-managed chat contract. Frontend may send a model, the backend injects runtime_context, runs the semantic tool loop, and keeps fallback routing to mistralai/mistral-medium-3.1."
+          }
+        },
+        {
           "name": "LLM Explain",
           "request": {
             "method": "POST",
@@ -308,7 +340,7 @@
     },
     {
       "name": "Compatibility",
-      "description": "Kept only for document discovery and the 4 semantic AI tool integrations announced by the backend manifest.",
+      "description": "Kept only for document discovery and the 4 semantic AI tool integrations announced by the backend manifest. Use this folder for MCP or external tool-calling agents, not for the main product chat.",
       "item": [
         {
           "name": "V1 Latest Documents",

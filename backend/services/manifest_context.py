@@ -70,13 +70,16 @@ def _parse_request_date(value: str, field_name: str) -> date:
         raise ValueError(f"{field_name} must be a valid date in YYYY-MM-DD format")
 
 
-def _parse_coordinate(value: str, field_name: str) -> float:
-    if not isinstance(value, str) or not COORDINATE_RE.fullmatch(value):
-        raise ValueError(f"{field_name} must be a finite decimal number")
-    try:
+def _parse_coordinate(value: str | int | float, field_name: str) -> float:
+    if isinstance(value, (int, float)):
         parsed = float(value)
-    except (TypeError, ValueError):
-        raise ValueError(f"{field_name} must be a finite decimal number")
+    else:
+        if not isinstance(value, str) or not COORDINATE_RE.fullmatch(value):
+            raise ValueError(f"{field_name} must be a finite decimal number")
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"{field_name} must be a finite decimal number")
     if not math.isfinite(parsed):
         raise ValueError(f"{field_name} must be a finite decimal number")
     return parsed
@@ -826,6 +829,35 @@ def build_runtime_llm_context(arguments: dict) -> tuple[dict, dict, int]:
     lat = arguments.get("lat")
     lon = arguments.get("lon")
     target_date = arguments.get("target_date")
+
+    if not crop and not sowing_date and lat is None and lon is None and target_date:
+        selected_target_date = _parse_request_date(target_date, "target_date")
+        return {
+            "current_datetime": datetime.now(EL_SALVADOR_TZ).isoformat(),
+            "timezone": "America/El_Salvador",
+            "user_inputs": {"crop": None, "sowing_date": None, "lat": None, "lon": None},
+            "ui_state": {
+                "selected_target_date": selected_target_date.isoformat(),
+                "selected_horizon": "gt_16_days",
+                "visible_panel": arguments.get("visible_panel", "risk_summary"),
+            },
+            "missing_required_user_data": ["crop", "sowing_date", "lat", "lon"],
+            "plant_state": None,
+            "observed_weather": None,
+            "forecast_weather": None,
+            "risk_assessment": None,
+            "recommendations": [],
+            "official_context": get_official_context(selected_target_date),
+            "sources_used": ["ambiente_canicula_2026"],
+            "source_policy": {
+                "observed": "SNET/MARN observado local",
+                "forecast": "Open-Meteo 1-16 dias",
+                "scenario": ">16 dias o perspectiva mensual/canicula",
+                "historical": "solo contexto, no alerta actual",
+            },
+        }, _build_meta(
+            cached=True, stale=False, upstream_status="ok", fetched_at=now_utc_iso()
+        ), 200
 
     missing_required_user_data = []
     if not crop:

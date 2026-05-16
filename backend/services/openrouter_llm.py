@@ -55,7 +55,6 @@ def generate_chat_reply(arguments: dict) -> tuple[dict, dict, int]:
             tool_choice="auto",
             parallel_tool_calls=False,
             temperature=0.2,
-            x_open_router_experimental_metadata="enabled",
         )
 
         choice = _first_choice(response)

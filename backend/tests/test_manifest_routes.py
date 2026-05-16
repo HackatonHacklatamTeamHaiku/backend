@@ -46,6 +46,13 @@ class ManifestRouteTests(unittest.TestCase):
         body = response.get_json()
         self.assertEqual(body["meta"]["upstream_status"], "invalid_request")
 
+    def test_llm_context_supports_official_only_mode(self):
+        response = self.app.get("/api/llm/context?target_date=2026-08-15")
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertIn("official_context", body)
+        self.assertEqual(body["user_inputs"]["crop"], None)
+
     def test_llm_explain_rejects_malformed_payloads(self):
         cases = [
             {},

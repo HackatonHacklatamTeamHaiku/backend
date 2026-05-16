@@ -28,7 +28,7 @@ logger = logging.getLogger("sato-agro-mcp")
 
 mcp = FastMCP(
     "sato-agro",
-    description="SATO-Agro: early warning and prescriptive advisory system for smallholder agriculture in El Salvador",
+    instructions="SATO-Agro: early warning and prescriptive advisory system for smallholder agriculture in El Salvador",
 )
 
 # ── Helpers ────────────────────────────────────────────────
@@ -178,7 +178,7 @@ def get_phenology_context(
 
 
 @mcp.tool()
-def build_runtime_context(
+def get_runtime_context(
     crop: str,
     sowing_date: str,
     lat: float,
@@ -186,9 +186,9 @@ def build_runtime_context(
     target_date: str,
 ) -> str:
     """
-    Build a complete runtime context bundle for AI generation.
-    Assembles observed weather, forecast, geo context, phenology,
-    and official seasonal context into one payload.
+    Build the complete runtime context bundle used by the assistant layer.
+    Returns user inputs, UI state, plant state, observed weather, forecast,
+    risk assessment, recommendations, official context, sources used, and source policy.
 
     Args:
         crop: Crop type — either "maiz" or "frijol"
@@ -197,8 +197,8 @@ def build_runtime_context(
         lon: Longitude of the plot
         target_date: Target date in YYYY-MM-DD format
     """
-    result = _backend_tool_call(
-        "buildRuntimeContext",
+    result = _backend_get(
+        "/api/llm/context",
         {
             "crop": crop,
             "sowing_date": sowing_date,
@@ -207,12 +207,13 @@ def build_runtime_context(
             "target_date": target_date,
         },
     )
-    return json.dumps(result.get("result", result), ensure_ascii=False, indent=2)
+    return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
 def explain_recommendation(
     risk_assessment: dict,
+    official_context: dict | None = None,
     audience: str = "productor",
 ) -> str:
     """
@@ -221,61 +222,27 @@ def explain_recommendation(
 
     Args:
         risk_assessment: The structured risk assessment object (from get_risk_assessment)
+        official_context: Optional official context object
         audience: Target audience — "productor" or "tecnico"
     """
+    payload = {"risk_assessment": risk_assessment, "audience": audience}
+    if official_context is not None:
+        payload["official_context"] = official_context
     result = _backend_tool_call(
         "explainRecommendation",
-        {"risk_assessment": risk_assessment, "audience": audience},
+        payload,
     )
     return json.dumps(result.get("result", result), ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
-def get_stations(station_name: str | None = None) -> str:
+def get_latest_documents() -> str:
     """
-    List weather stations in El Salvador.
-    Optionally filter by name (case-insensitive partial match).
-
-    Args:
-        station_name: Optional station name to search for (e.g. "Ilopango", "UES")
+    Get the latest official documents used for RAG and citation workflows.
+    Returns the canonical document registry from the backend compatibility route.
     """
-    args = {}
-    if station_name:
-        args["station_name"] = station_name
-    result = _backend_tool_call("get_stations", args)
-    return json.dumps(result.get("result", result), ensure_ascii=False, indent=2)
-
-
-@mcp.tool()
-def get_current_features(lat: float, lon: float) -> str:
-    """
-    Get current observation features for the nearest weather station
-    to a location. Returns temperature, wind, observation age, etc.
-
-    Args:
-        lat: Latitude of the point
-        lon: Longitude of the point
-    """
-    result = _backend_tool_call(
-        "get_current_features", {"lat": lat, "lon": lon}
-    )
-    return json.dumps(result.get("result", result), ensure_ascii=False, indent=2)
-
-
-@mcp.tool()
-def get_latest_documents(document_type: str | None = None) -> str:
-    """
-    Get latest official documents (48h forecast, weekly PDF, agro bulletin).
-    Useful for RAG and citations.
-
-    Args:
-        document_type: Optional filter — "forecast_48h", "weekly_forecast_pdf", or "agro_bulletin_pdf"
-    """
-    args = {}
-    if document_type:
-        args["document_type"] = document_type
-    result = _backend_tool_call("get_latest_documents", args)
-    return json.dumps(result.get("result", result), ensure_ascii=False, indent=2)
+    result = _backend_get("/api/v1/documents/latest")
+    return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 # ── MCP Resources ─────────────────────────────────────────

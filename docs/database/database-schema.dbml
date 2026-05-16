@@ -1,0 +1,281 @@
+Project sato_agro {
+  database_type: "PostgreSQL"
+
+  Note: '''
+  SATO-Agro database design for PostgreSQL + Supabase.
+
+  Authentication:
+  - Use Supabase Auth for email/password, OAuth, magic links, etc.
+  - Do not store passwords in app tables.
+  - profiles.id should match auth.users.id from Supabase.
+
+  Main product goals covered by this schema:
+  - user login and profile
+  - user location and farm structure
+  - maize and bean crop cycles
+  - phenological phase tracking
+  - advisory delivery and history
+  '''
+}
+
+Enum user_role {
+  producer
+  technician
+  admin
+}
+
+Enum crop_code {
+  maize
+  bean
+}
+
+Enum cycle_status {
+  planned
+  active
+  harvested
+  failed
+  archived
+}
+
+Enum phase_source {
+  manual
+  rule_engine
+  advisor
+}
+
+Enum risk_level {
+  low
+  medium
+  high
+  critical
+}
+
+Enum advisory_status {
+  draft
+  sent
+  read
+  dismissed
+  expired
+}
+
+Table profiles {
+  id uuid [pk, note: "References Supabase auth.users.id"]
+  full_name varchar(150) [not null]
+  display_name varchar(80)
+  phone varchar(30)
+  whatsapp_phone varchar(30)
+  role user_role [not null, default: 'producer']
+  preferred_language varchar(10) [not null, default: 'es']
+  country varchar(80) [not null, default: 'El Salvador']
+  department varchar(120)
+  municipality varchar(120)
+  default_lat decimal(9,6)
+  default_lon decimal(9,6)
+  onboarding_completed boolean [not null, default: false]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    phone
+    whatsapp_phone
+    (department, municipality)
+  }
+}
+
+Table user_preferences {
+  profile_id uuid [pk, ref: > profiles.id]
+  alert_whatsapp_enabled boolean [not null, default: true]
+  alert_sms_enabled boolean [not null, default: false]
+  alert_push_enabled boolean [not null, default: false]
+  alert_email_enabled boolean [not null, default: false]
+  daily_summary_enabled boolean [not null, default: true]
+  severe_only boolean [not null, default: false]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+Table farms {
+  id uuid [pk, default: `gen_random_uuid()`]
+  owner_profile_id uuid [not null, ref: > profiles.id]
+  farm_name varchar(150) [not null]
+  country varchar(80) [not null, default: 'El Salvador']
+  department varchar(120)
+  municipality varchar(120)
+  canton varchar(120)
+  caserio varchar(120)
+  address_text text
+  centroid_lat decimal(9,6)
+  centroid_lon decimal(9,6)
+  total_area_ha decimal(10,2)
+  notes text
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    owner_profile_id
+    (department, municipality)
+  }
+}
+
+Table plots {
+  id uuid [pk, default: `gen_random_uuid()`]
+  farm_id uuid [not null, ref: > farms.id]
+  plot_name varchar(150) [not null]
+  plot_code varchar(50)
+  area_ha decimal(10,2)
+  centroid_lat decimal(9,6)
+  centroid_lon decimal(9,6)
+  elevation_m integer
+  irrigation_available boolean [not null, default: false]
+  water_source varchar(120)
+  soil_type varchar(120)
+  slope_class varchar(50)
+  notes text
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    farm_id
+    plot_code
+  }
+}
+
+Table crop_types {
+  id smallint [pk]
+  code crop_code [not null, unique]
+  name_es varchar(80) [not null]
+  scientific_name varchar(120)
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table phenological_phases {
+  id uuid [pk, default: `gen_random_uuid()`]
+  crop_type_id smallint [not null, ref: > crop_types.id]
+  phase_code varchar(50) [not null]
+  phase_name_es varchar(120) [not null]
+  phase_order integer [not null]
+  start_day_after_sowing integer [not null]
+  end_day_after_sowing integer [not null]
+  is_critical boolean [not null, default: false]
+  description text
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    (crop_type_id, phase_code) [unique]
+    (crop_type_id, phase_order) [unique]
+  }
+}
+
+Table crop_cycles {
+  id uuid [pk, default: `gen_random_uuid()`]
+  plot_id uuid [not null, ref: > plots.id]
+  owner_profile_id uuid [not null, ref: > profiles.id]
+  crop_type_id smallint [not null, ref: > crop_types.id]
+  season_label varchar(80)
+  sowing_date date [not null]
+  expected_harvest_date date
+  actual_harvest_date date
+  seed_variety varchar(120)
+  seed_source varchar(120)
+  planting_method varchar(80)
+  current_phase_id uuid [ref: > phenological_phases.id]
+  current_phase_day integer
+  status cycle_status [not null, default: 'active']
+  area_ha decimal(10,2)
+  notes text
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    plot_id
+    owner_profile_id
+    crop_type_id
+    sowing_date
+    status
+  }
+}
+
+Table cycle_phase_history {
+  id uuid [pk, default: `gen_random_uuid()`]
+  crop_cycle_id uuid [not null, ref: > crop_cycles.id]
+  phase_id uuid [not null, ref: > phenological_phases.id]
+  source phase_source [not null, default: 'rule_engine']
+  started_on date [not null]
+  ended_on date
+  confidence_score decimal(5,2)
+  notes text
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    crop_cycle_id
+    (crop_cycle_id, phase_id, started_on)
+  }
+}
+
+Table advisory_runs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  crop_cycle_id uuid [not null, ref: > crop_cycles.id]
+  profile_id uuid [not null, ref: > profiles.id]
+  nearest_station_id integer
+  station_name varchar(150)
+  risk_level risk_level [not null]
+  trigger_type varchar(80) [not null]
+  reasoning_summary text [not null]
+  recommended_action text [not null]
+  action_window_days integer
+  based_on_observed_at timestamptz
+  based_on_document_ids text [note: "Optional comma-separated ids or migrate later to a join table"]
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    crop_cycle_id
+    profile_id
+    risk_level
+    created_at
+  }
+}
+
+Table advisory_messages {
+  id uuid [pk, default: `gen_random_uuid()`]
+  advisory_run_id uuid [not null, ref: > advisory_runs.id]
+  profile_id uuid [not null, ref: > profiles.id]
+  status advisory_status [not null, default: 'draft']
+  title varchar(160) [not null]
+  message_body text [not null]
+  channel varchar(30) [not null, default: 'in_app']
+  sent_at timestamptz
+  read_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    advisory_run_id
+    profile_id
+    status
+  }
+}
+
+Table user_crop_interests {
+  id uuid [pk, default: `gen_random_uuid()`]
+  profile_id uuid [not null, ref: > profiles.id]
+  crop_type_id smallint [not null, ref: > crop_types.id]
+  is_primary boolean [not null, default: false]
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    (profile_id, crop_type_id) [unique]
+  }
+}
+
+Note: '''
+Suggested seed data:
+
+crop_types:
+- 1, maize, "Maíz"
+- 2, bean, "Frijol"
+
+phenological_phases:
+- define a sequence for maize
+- define a sequence for bean
+- include start_day_after_sowing and end_day_after_sowing
+- mark critical phases such as flowering / grain filling when appropriate
+'''

@@ -85,18 +85,22 @@ Top-level files:
 
 - `README.md`
   - project overview and quick start
-- `context.md`
+- `docs/project/context.md`
   - original hackathon framing and product intent
-- `snet_api_roadmap.md`
+- `docs/data-sources/snet-api-roadmap.md`
   - verified source roadmap
-- `snet_raw_endpoints.md`
+- `docs/data-sources/snet-raw-endpoints.md`
   - raw endpoint reference
-- `snet_latest_2026_endpoints.md`
+- `docs/data-sources/snet-latest-2026-endpoints.md`
   - latest/current verified source list
-- `backend_hybrid_shape.md`
+- `docs/architecture/backend-hybrid-shape.md`
   - canonical backend shape for frontend + AI
-- `llm_function_calling_spec.md`
+- `docs/ai/llm-function-calling-spec.md`
   - tool contract for LLM integration
+- `docs/database/database-capture-plan.md`
+  - onboarding and storage planning for user/farm/crop data
+- `docs/database/database-schema.dbml`
+  - dbdiagram schema for PostgreSQL + Supabase
 
 Backend:
 
@@ -507,9 +511,9 @@ Useful checks:
 If you are new to the repo, read in this order:
 
 1. `README.md`
-2. `context.md`
-3. `backend_hybrid_shape.md`
-4. `llm_function_calling_spec.md`
+2. `docs/project/context.md`
+3. `docs/architecture/backend-hybrid-shape.md`
+4. `docs/ai/llm-function-calling-spec.md`
 5. this file
 
 Then inspect:

@@ -118,12 +118,20 @@ curl "http://127.0.0.1:5000/api/v1/dashboard/summary?lat=13.69&lon=-89.21"
 ClimateAi/
 ├── README.md
 ├── agents.md
-├── context.md                          # Problem statement & hackathon context
-├── backend_hybrid_shape.md             # Canonical backend shape for frontend + AI
-├── llm_function_calling_spec.md        # LLM tool contract
-├── snet_api_roadmap.md                 # Verified upstream source roadmap
-├── snet_latest_2026_endpoints.md       # Verified upstream source docs
-├── snet_raw_endpoints.md               # Raw endpoint reference
+├── docs/
+│   ├── project/
+│   │   └── context.md                  # Problem statement & hackathon context
+│   ├── architecture/
+│   │   └── backend-hybrid-shape.md     # Canonical backend shape for frontend + AI
+│   ├── ai/
+│   │   └── llm-function-calling-spec.md# LLM tool contract
+│   ├── data-sources/
+│   │   ├── snet-api-roadmap.md         # Verified upstream source roadmap
+│   │   ├── snet-latest-2026-endpoints.md
+│   │   └── snet-raw-endpoints.md
+│   └── database/
+│       ├── database-capture-plan.md
+│       └── database-schema.dbml
 └── backend/
     ├── app.py                          # Flask app factory
     ├── config.py                       # URLs, TTLs, HTTP defaults

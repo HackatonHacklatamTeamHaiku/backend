@@ -647,14 +647,29 @@ def build_runtime_llm_context(arguments: dict) -> tuple[dict, dict, int]:
 def explain_recommendation(payload: dict) -> dict:
     risk = payload.get("risk_assessment") or {}
     official = payload.get("official_context") or {}
-    plant = payload.get("plant_state") or {}
+    plant = payload.get("plant_state") or risk.get("plant_state") or risk.get("phenology") or {}
     recommendations = payload.get("recommendations") or []
 
-    phase = plant.get("phase") or "fase estimada"
+    phase = plant.get("phase_name") or plant.get("phase") or "fase estimada"
     level = risk.get("risk_level") or "ATENCION"
     confidence = risk.get("confidence") or "media"
     factor_bits = []
-    for factor in risk.get("risk_factors") or []:
+    raw_factors = risk.get("risk_factors") or []
+    if isinstance(raw_factors, dict):
+        normalized_factors = []
+        for factor_id, factor in raw_factors.items():
+            if not isinstance(factor, dict):
+                continue
+            normalized_factors.append(
+                {
+                    "label": factor.get("label") or factor_id.replace("_", " "),
+                    "state": factor.get("severity") or factor.get("state"),
+                }
+            )
+    else:
+        normalized_factors = [factor for factor in raw_factors if isinstance(factor, dict)]
+
+    for factor in normalized_factors:
         label = factor.get("label")
         state = factor.get("state")
         if label and state:
@@ -663,7 +678,7 @@ def explain_recommendation(payload: dict) -> dict:
 
     summary = (
         f"Tu cultivo esta en {phase}. El riesgo preventivo es {level} con confianza {confidence} "
-        f"porque el backend detecta {factor_text}."
+        f"porque se observa {factor_text}."
     )
     if official.get("canicula_2026_watch"):
         summary += " Ademas, existe vigilancia oficial por canicula o periodos secos en 2026."

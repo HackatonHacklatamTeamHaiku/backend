@@ -5,11 +5,84 @@
 
 ---
 
-## 1. Superficie recomendada
+## 1. Auth y sesión
+
+Todas las rutas bajo `/api/*` requieren JWT de usuario en:
+
+```http
+Authorization: Bearer <supabase_access_token>
+```
+
+Excepciones públicas:
+
+- `GET /`
+- `GET /health`
+
+Flujo recomendado en frontend:
+
+1. autenticar usuario con Supabase Auth desde el frontend
+2. obtener `session.access_token`
+3. enviar ese token en cada request al backend
+4. validar sesión y perfil con `GET /api/auth/me`
+
+El frontend necesita su `SUPABASE_URL` y su publishable key para hacer login directamente contra Supabase Auth.
+
+Endpoint de sesión actual:
+
+```http
+GET /api/auth/me
+```
+
+Respuesta esperada:
+
+```json
+{
+  "data": {
+    "user_id": "uuid",
+    "email": "test@example.com",
+    "role": "authenticated",
+    "claims": {
+      "sub": "uuid",
+      "email": "test@example.com",
+      "role": "authenticated"
+    },
+    "profile": {
+      "id": "uuid",
+      "display_name": "Productor Prueba",
+      "role": "producer"
+    }
+  },
+  "meta": {
+    "upstream_status": "ok"
+  }
+}
+```
+
+Para poblar un usuario de prueba en Supabase Auth + `profiles`, usa:
+
+```bash
+cd backend/backend
+python scripts/seed_test_user.py
+```
+
+Credenciales dev por defecto:
+
+- email: `test@example.com`
+- password: `TestPassword123!`
+
+Notas:
+
+- el backend valida JWTs firmados por Supabase vía JWKS
+- si el perfil no existe todavía, el backend lo crea de forma mínima al autenticar al usuario
+
+---
+
+## 2. Superficie recomendada
 
 Para UI nueva, usa estas rutas:
 
 - `GET /health`
+- `GET /api/auth/me`
 - `GET /api/weather/observed`
 - `GET /api/weather/forecast`
 - `GET /api/geo/context`
@@ -28,7 +101,7 @@ No construyas UI nueva sobre rutas `/api/v1/observations/*`, `/api/v1/forecast/*
 
 ---
 
-## 2. Health Check
+## 3. Health Check
 
 ```http
 GET /health
@@ -54,10 +127,11 @@ Uso frontend:
 
 ---
 
-## 3. Clima observado
+## 4. Clima observado
 
 ```http
 GET /api/weather/observed?lat=13.69&lon=-89.21
+Authorization: Bearer <supabase_access_token>
 ```
 
 Parámetros:
@@ -126,10 +200,11 @@ Uso frontend:
 
 ---
 
-## 4. Pronóstico
+## 5. Pronóstico
 
 ```http
 GET /api/weather/forecast?lat=13.69&lon=-89.21&target_date=2026-08-15
+Authorization: Bearer <supabase_access_token>
 ```
 
 Parámetros:
@@ -187,10 +262,11 @@ Uso frontend:
 
 ---
 
-## 5. Contexto geográfico
+## 6. Contexto geográfico
 
 ```http
 GET /api/geo/context?lat=13.69&lon=-89.21&target_date=2026-08-15
+Authorization: Bearer <supabase_access_token>
 ```
 
 Parámetros:
@@ -280,10 +356,11 @@ Uso frontend:
 
 ---
 
-## 6. Evaluación de riesgo
+## 7. Evaluación de riesgo
 
 ```http
 GET /api/risk/assessment?crop=maiz&sowing_date=2026-05-20&lat=13.69&lon=-89.21&target_date=2026-08-15
+Authorization: Bearer <supabase_access_token>
 ```
 
 Parámetros:
@@ -413,10 +490,11 @@ No asumas que existe un campo top-level llamado `phenology`; el backend usa `pla
 
 ---
 
-## 7. Contexto LLM
+## 8. Contexto LLM
 
 ```http
 GET /api/llm/context?crop=maiz&sowing_date=2026-05-20&lat=13.69&lon=-89.21&target_date=2026-08-15
+Authorization: Bearer <supabase_access_token>
 ```
 
 Parámetros:
@@ -433,6 +511,7 @@ Fallback soportado:
 
 ```http
 GET /api/llm/context?target_date=2026-08-15
+Authorization: Bearer <supabase_access_token>
 ```
 
 Eso devuelve solo `official_context`.
@@ -496,11 +575,12 @@ Uso frontend:
 
 ---
 
-## 8. Explicación LLM
+## 9. Explicación LLM
 
 ```http
 POST /api/llm/explain
 Content-Type: application/json
+Authorization: Bearer <supabase_access_token>
 ```
 
 Body mínimo:
@@ -565,11 +645,12 @@ Uso frontend:
 
 ---
 
-## 9. Chat LLM
+## 10. Chat LLM
 
 ```http
 POST /api/llm/chat
 Content-Type: application/json
+Authorization: Bearer <supabase_access_token>
 ```
 
 Body mínimo útil:
@@ -651,10 +732,11 @@ Uso frontend:
 
 ---
 
-## 10. AI Tools — manifest
+## 11. AI Tools — manifest
 
 ```http
 GET /api/v1/ai/tools/manifest
+Authorization: Bearer <supabase_access_token>
 ```
 
 No requiere parámetros.
@@ -675,11 +757,12 @@ Uso frontend:
 
 ---
 
-## 11. AI Tools — dispatcher
+## 12. AI Tools — dispatcher
 
 ```http
 POST /api/v1/ai/tools/call
 Content-Type: application/json
+Authorization: Bearer <supabase_access_token>
 ```
 
 Siempre envía:
@@ -788,37 +871,40 @@ No bases un agente nuevo en tools viejas como:
 
 ---
 
-## 12. Flujo recomendado para frontend
+## 13. Flujo recomendado para frontend
 
 ```text
 1. App init
    GET /health
 
-2. Onboarding / parcela
+2. Auth
+   GET /api/auth/me
+
+3. Onboarding / parcela
    GET /api/geo/context?lat=X&lon=Y
 
-3. Dashboard principal
+4. Dashboard principal
    GET /api/weather/observed?lat=X&lon=Y
    GET /api/risk/assessment?crop=X&sowing_date=X&lat=X&lon=X&target_date=X
 
-4. Vista de planificación
+5. Vista de planificación
    GET /api/weather/forecast?lat=X&lon=Y&target_date=X
 
-5. Chat / asistente
+6. Chat / asistente
    POST /api/llm/chat
 
-6. Explicación simple
+7. Explicación simple
    GET /api/risk/assessment
    POST /api/llm/explain
 
-7. Integración externa tipo MCP o agente con function calling propio
+8. Integración externa tipo MCP o agente con function calling propio
    GET /api/v1/ai/tools/manifest
    POST /api/v1/ai/tools/call
 ```
 
 ---
 
-## 13. Política de `meta`
+## 14. Política de `meta`
 
 Todas las respuestas incluyen `meta`.
 
@@ -832,11 +918,13 @@ Todas las respuestas incluyen `meta`.
 
 ---
 
-## 14. Resumen para el agente de frontend
+## 15. Resumen para el agente de frontend
 
 Si el agente va a construir UI y wiring de datos, estas son las reglas:
 
+- autenticar primero con Supabase y mandar `Authorization: Bearer <access_token>` a toda ruta `/api/*`
 - usar la superficie `/api/weather`, `/api/geo`, `/api/risk`, `/api/llm`
+- usar `/api/auth/me` para bootstrap de sesión y perfil
 - usar `/api/llm/chat` para el chat principal del producto
 - permitir `model` opcional si la UI expone selector
 - asumir fallback backend a `mistralai/mistral-medium-3.1`

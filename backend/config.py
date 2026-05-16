@@ -82,6 +82,13 @@ class Config:
     DATABASE_URL = os.getenv("DATABASE_URL", "")
     SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 
+    # ── Auth / JWT ─────────────────────────────────────────────
+    AUTH_ENABLED = os.getenv("AUTH_ENABLED", "true").lower() == "true"
+    AUTH_BYPASS_FOR_TESTING = os.getenv("AUTH_BYPASS_FOR_TESTING", "false").lower() == "true"
+    SUPABASE_JWT_ISSUER = os.getenv("SUPABASE_JWT_ISSUER", "")
+    SUPABASE_JWT_AUDIENCE = os.getenv("SUPABASE_JWT_AUDIENCE", "authenticated")
+    SUPABASE_JWKS_TTL = int(os.getenv("SUPABASE_JWKS_TTL", "3600"))
+
     # ── OpenRouter / LLM ──────────────────────────────────────
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
     OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "")

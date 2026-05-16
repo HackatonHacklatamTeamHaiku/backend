@@ -14,7 +14,9 @@ from app import create_app
 
 class ManifestRouteTests(unittest.TestCase):
     def setUp(self):
-        self.app = create_app().test_client()
+        app = create_app()
+        app.config.update(TESTING=True, AUTH_BYPASS_FOR_TESTING=True)
+        self.app = app.test_client()
 
     @patch("routes.weather.get_weather_observed")
     def test_weather_observed_route(self, mocked):
@@ -91,6 +93,13 @@ class ManifestRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.get_json()
         self.assertIn("Vegetativo temprano", body["data"]["summary"])
+
+    def test_auth_me_returns_testing_user_when_auth_bypass_enabled(self):
+        response = self.app.get("/api/auth/me")
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertEqual(body["email"], "testing@satoagro.local")
+        self.assertEqual(body["profile"]["role"], "producer")
 
     @patch("routes.risk.get_risk_assessment")
     def test_risk_assessment_route(self, mocked):

@@ -59,6 +59,7 @@ The backend **proxies, normalizes, and caches** all upstream data so the fronten
 | `GET` | `/api/weather/forecast?lat=13.69&lon=-89.21&target_date=2026-05-20` | Manifest-aligned Open-Meteo forecast bundle |
 | `GET` | `/api/geo/context?lat=13.69&lon=-89.21` | Manifest-aligned geo context bundle |
 | `GET` | `/api/risk/assessment?crop=maiz&sowing_date=2026-05-20&lat=13.69&lon=-89.21` | Manifest-aligned explainable risk assessment |
+| `GET` | `/api/auth/me` | Current authenticated user + linked producer profile |
 | `GET` | `/api/llm/context?...` | Runtime LLM context contract |
 | `POST` | `/api/llm/chat` | Backend-managed chat with OpenRouter + semantic tool loop |
 | `POST` | `/api/llm/explain` | Backend-generated plain-language explanation |
@@ -113,17 +114,56 @@ Verify the mounted database:
 python backend/scripts/verify_database.py
 ```
 
+### Auth
+
+All `/api/*` routes now require:
+
+```http
+Authorization: Bearer <supabase_access_token>
+```
+
+Public exceptions:
+
+- `/`
+- `/health`
+
+The backend validates Supabase JWTs using the project's JWKS and exposes:
+
+```http
+GET /api/auth/me
+```
+
+to return the authenticated user plus the linked `profiles` row.
+
+To seed a developer test user into Supabase Auth and `public.profiles`:
+
+```bash
+python backend/scripts/seed_test_user.py
+```
+
+Default dev credentials:
+
+- email: `test@example.com`
+- password: `TestPassword123!`
+
+The frontend still needs its own `SUPABASE_URL` and publishable key to perform login directly against Supabase Auth.
+
 ### Test
 
 ```bash
 # Health check
 curl http://127.0.0.1:5000/health
 
+# Backend auth bootstrap
+curl "http://127.0.0.1:5000/api/auth/me" \
+  -H "Authorization: Bearer <supabase_access_token>"
+
 # Risk assessment
 curl "http://127.0.0.1:5000/api/risk/assessment?crop=maiz&sowing_date=2026-05-20&lat=13.69&lon=-89.21&target_date=2026-08-15"
 
 # Chat
 curl -X POST "http://127.0.0.1:5000/api/llm/chat" \
+  -H "Authorization: Bearer <supabase_access_token>" \
   -H "Content-Type: application/json" \
   -d "{\"message\":\"como va mi maiz\",\"crop\":\"maiz\",\"sowing_date\":\"2026-05-10\",\"lat\":13.8,\"lon\":-89.1833,\"target_date\":\"2026-05-16\"}"
 ```

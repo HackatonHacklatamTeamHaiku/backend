@@ -18,6 +18,7 @@ from flask import Flask
 from flask_cors import CORS
 
 from config import Config
+from services.auth import require_api_auth
 
 
 def create_app() -> Flask:
@@ -27,6 +28,7 @@ def create_app() -> Flask:
 
     # Enable CORS so the frontend can call the API from any origin
     CORS(app)
+    app.before_request(require_api_auth)
 
     # ── Database (Supabase PostgreSQL) ────────────────────────
     from services.database import init_pool, close_pool
@@ -47,6 +49,7 @@ def create_app() -> Flask:
 
     # ── Register blueprints ──────────────────────────────────
     from routes.health import bp as health_bp
+    from routes.auth import bp as auth_bp
     from routes.canonical import bp as canonical_bp
     from routes.ai_tools import bp as ai_tools_bp
     from routes.weather import bp as weather_bp
@@ -55,6 +58,7 @@ def create_app() -> Flask:
     from routes.llm import bp as llm_bp
 
     app.register_blueprint(health_bp)
+    app.register_blueprint(auth_bp)
     app.register_blueprint(canonical_bp)
     app.register_blueprint(ai_tools_bp)
     app.register_blueprint(weather_bp)
@@ -74,6 +78,7 @@ def create_app() -> Flask:
                 "/api/weather/forecast?lat=&lon=&target_date=",
                 "/api/geo/context?lat=&lon=",
                 "/api/risk/assessment?crop=&sowing_date=&lat=&lon=",
+                "/api/auth/me",
                 "/api/llm/context",
                 "/api/llm/explain",
                 "/api/llm/chat",

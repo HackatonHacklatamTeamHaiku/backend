@@ -301,6 +301,7 @@ The generic function-calling interface is:
 Tool names now include both legacy and manifest-oriented operations, including:
 
 - `getRiskAssessment`
+- `getWeatherObserved`
 - `getOfficialContext`
 - `getPhenologyContext`
 - `buildRuntimeContext`

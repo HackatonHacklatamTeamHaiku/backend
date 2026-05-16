@@ -28,11 +28,13 @@ GET /api/v1/ai/tools/manifest
 
 It returns the currently supported tool names, descriptions, and input schemas.
 
-The current manifest advertises 4 semantic tools:
+The current manifest advertises 6 tools:
 
 - `getRiskAssessment`
+- `getWeatherObserved`
 - `getOfficialContext`
 - `getPhenologyContext`
+- `buildRuntimeContext`
 - `explainRecommendation`
 
 Do not hardcode an older 10-tool manifest.
@@ -115,6 +117,29 @@ Use cases:
 
 ---
 
+### `getWeatherObserved`
+
+Purpose:
+
+- retrieve normalized observed weather for a location, including recent rainfall, temperature, wind, nearest stations, source metadata, and warnings
+
+Arguments:
+
+```json
+{
+  "lat": 13.69,
+  "lon": -89.21
+}
+```
+
+Use cases:
+
+- answer current weather questions with backend-normalized SNET/MARN values
+- provide observed context before a risk or advisory explanation
+- avoid frontend or LLM clients calling raw SNET sources directly
+
+---
+
 ### `getOfficialContext`
 
 Purpose:
@@ -171,6 +196,34 @@ Use cases:
 
 ---
 
+### `buildRuntimeContext`
+
+Purpose:
+
+- build the complete assistant runtime context bundle from the backend source of truth
+- includes user inputs, plant state, observed weather, forecast/scenario context, risk assessment, recommendations, official context, assumptions, warnings, and source policy
+
+Arguments:
+
+```json
+{
+  "crop": "maiz",
+  "sowing_date": "2026-05-20",
+  "lat": 13.69,
+  "lon": -89.21,
+  "target_date": "2026-08-15",
+  "visible_panel": "risk_summary"
+}
+```
+
+Use cases:
+
+- prepare a single, backend-composed context object before LLM generation
+- avoid clients stitching weather, geo, risk, and official context differently
+- power MCP or assistant integrations that need a complete context bundle
+
+---
+
 ### `explainRecommendation`
 
 Purpose:
@@ -205,11 +258,15 @@ For an assistant:
 
 1. If the user asks about current or future crop risk:
    - call `getRiskAssessment`
-2. If the user asks whether canícula or seasonal dryness is officially expected:
+2. If the user asks about current observed weather values:
+   - call `getWeatherObserved`
+3. If the user asks whether canícula or seasonal dryness is officially expected:
    - call `getOfficialContext`
-3. If the user asks only about stage, flowering, pod formation, or sensitivity:
+4. If the user asks only about stage, flowering, pod formation, or sensitivity:
    - call `getPhenologyContext`
-4. If the backend result already exists and the user wants a simpler explanation:
+5. If the assistant needs one complete generation context:
+   - call `buildRuntimeContext`
+6. If the backend result already exists and the user wants a simpler explanation:
    - call `explainRecommendation`
 
 ---
@@ -219,4 +276,25 @@ For an assistant:
 - use tool calls for fresh structured risk and phenology
 - use `/api/v1/documents/latest` separately when you need document discovery for RAG
 - do not rely on embeddings for current numeric climate values or live risk state
-- do not build new assistants around older tools like `get_current_features`, `get_location_context`, `get_agro_advisory`, or `buildRuntimeContext`
+- do not build new assistants around older legacy tools like `get_current_features`, `get_location_context`, or `get_agro_advisory`
+- use `buildRuntimeContext` when an assistant needs the complete backend-composed runtime contract
+
+---
+
+## MCP Notes
+
+The MCP server exposes snake_case tools that map to these backend tool names or manifest routes.
+
+Important MCP response shape:
+
+```json
+{
+  "ok": true,
+  "backend_tool_name": "buildRuntimeContext",
+  "arguments": {},
+  "result": {},
+  "meta": {}
+}
+```
+
+On backend or validation errors, MCP tools return `ok: false` with `error`, `status_code`, and any backend `meta` preserved when available. MCP clients should inspect `ok` instead of assuming every tool response is successful.

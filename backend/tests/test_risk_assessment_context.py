@@ -88,6 +88,48 @@ class RiskAssessmentContextTests(unittest.TestCase):
         self.assertFalse(any("rain_sum_mm no estaba disponible" in item for item in data["assumptions"]))
         self.assertTrue(any("Forecast agregado" in item for item in data["derived_inputs"]))
 
+    def test_plus_one_day_is_labeled_as_forecast_window(self):
+        today = datetime.now(EL_SALVADOR_TZ).date()
+        raw = make_open_meteo_raw(today)
+        target = today + timedelta(days=1)
+
+        with patch.object(manifest_context, "get_weather_observed") as observed, \
+            patch.object(manifest_context, "get_weather_forecast") as forecast, \
+            patch.object(manifest_context, "get_geo_context") as geo, \
+            patch.object(manifest_context, "get_official_context") as official, \
+            patch.object(manifest_context, "_get_forecast") as raw_forecast:
+            observed.return_value = (
+                {"warnings": [], "sources_used": ["snet_lluvia_data_24h", "snet_temperatura_actual_max_min"]},
+                {"stale": False, "fetched_at": "2026-05-16T00:00:00Z"},
+            )
+            forecast.return_value = ({"warnings": [], "sources_used": ["open_meteo_forecast"]}, {"stale": False, "fetched_at": "2026-05-16T00:00:00Z"})
+            geo.return_value = (
+                {
+                    "soil_context": {"water_retention_modifier": "neutral"},
+                    "climate_outlook_context": {"dryness_prior": "normal"},
+                    "warnings": [],
+                    "sources_used": ["snet_servicio_suelos_pais"],
+                },
+                {"stale": False, "fetched_at": "2026-05-16T00:00:00Z"},
+            )
+            official.return_value = {"canicula_2026_watch": False, "sources_used": []}
+            raw_forecast.return_value = (raw, False, "2026-05-16T00:00:00Z")
+
+            data, _, status = manifest_context.get_risk_assessment(
+                {
+                    "crop": "maiz",
+                    "sowing_date": today.isoformat(),
+                    "lat": "13.69",
+                    "lon": "-89.21",
+                    "target_date": target.isoformat(),
+                }
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(data["risk_window_weather"]["source_type"], "forecast_window")
+        self.assertIn("open_meteo_forecast", data["source_roles"]["scoring_sources"])
+        self.assertNotIn("snet_lluvia_data_24h", data["source_roles"]["scoring_sources"])
+
     def test_gt_16_days_uses_seasonal_scenario_not_rain_zero_forecast(self):
         today = datetime.now(EL_SALVADOR_TZ).date()
         target = today + timedelta(days=20)
@@ -221,6 +263,29 @@ class RiskAssessmentContextTests(unittest.TestCase):
         self.assertIn("escenario estacional", result["summary"])
         self.assertIn("no un pronostico puntual", result["summary"])
         self.assertIn("Alerta secundaria", result["summary"])
+
+    def test_llm_explain_mentions_degraded_data_quality(self):
+        result = manifest_context.explain_recommendation(
+            {
+                "risk_assessment": {
+                    "risk_level": "NORMAL",
+                    "confidence": "media_alta",
+                    "horizon_confidence": "media_alta",
+                    "data_quality_confidence": "media_baja",
+                    "assumptions": ["seasonal default"],
+                    "input_warnings": ["missing outlook"],
+                    "risk_factors": [{"label": "Deficit hidrico", "state": "sin deficit"}],
+                    "secondary_alerts": [],
+                },
+                "plant_state": {"phase": "Vegetativo temprano"},
+                "recommendations": ["Mantener monitoreo normal."],
+                "official_context": {},
+            }
+        )
+
+        self.assertIn("confianza de horizonte media_alta", result["summary"])
+        self.assertIn("calidad de datos media_baja", result["summary"])
+        self.assertIn("supuestos o advertencias", result["summary"])
 
 
 if __name__ == "__main__":

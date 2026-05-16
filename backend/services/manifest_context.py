@@ -5,6 +5,7 @@ Composition helpers that align backend responses with the manifest contract.
 from __future__ import annotations
 
 import math
+import re
 from datetime import date, datetime, timedelta
 
 from config import Config
@@ -41,6 +42,8 @@ EL_SALVADOR_BOUNDS = {
     "lon_min": -90.3,
     "lon_max": -87.6,
 }
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+COORDINATE_RE = re.compile(r"^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$")
 
 OUTLOOK_LAYER_BY_MONTH = {
     8: (12, "agosto"),
@@ -59,6 +62,8 @@ def _distance_confidence(distance_km: float) -> str:
 
 
 def _parse_request_date(value: str, field_name: str) -> date:
+    if not isinstance(value, str) or not DATE_RE.fullmatch(value):
+        raise ValueError(f"{field_name} must be a valid date in YYYY-MM-DD format")
     try:
         return datetime.strptime(value, "%Y-%m-%d").date()
     except (TypeError, ValueError):
@@ -66,12 +71,14 @@ def _parse_request_date(value: str, field_name: str) -> date:
 
 
 def _parse_coordinate(value: str, field_name: str) -> float:
+    if not isinstance(value, str) or not COORDINATE_RE.fullmatch(value):
+        raise ValueError(f"{field_name} must be a finite decimal number")
     try:
         parsed = float(value)
     except (TypeError, ValueError):
-        raise ValueError(f"{field_name} must be a finite number")
+        raise ValueError(f"{field_name} must be a finite decimal number")
     if not math.isfinite(parsed):
-        raise ValueError(f"{field_name} must be a finite number")
+        raise ValueError(f"{field_name} must be a finite decimal number")
     return parsed
 
 
@@ -111,7 +118,7 @@ def _risk_window_weather_from_payload(payload: dict) -> dict:
             "note": "Escenario estacional sin pronostico puntual diario.",
         }
     return {
-        "source_type": "observado_modelado" if payload.get("days_window") == 1 else "forecast_window",
+        "source_type": "forecast_window" if payload.get("forecast_window") else "observado_modelado",
         "window": payload.get("forecast_window") or {
             "start": payload.get("target_date"),
             "end": payload.get("target_date"),
@@ -136,6 +143,12 @@ def _source_roles(climate_payload: dict, observed: dict, forecast: dict, geo: di
             + (official.get("sources_used") or [])
         )
     )
+    model_default_inputs = []
+    if climate_payload.get("soil") is None:
+        model_default_inputs.append("soil=neutral")
+    if climate_payload.get("seasonal") is None:
+        model_default_inputs.append("seasonal=normal")
+
     if climate_payload.get("scenario_mode") == "seasonal":
         scoring_sources = list(
             dict.fromkeys(
@@ -144,26 +157,19 @@ def _source_roles(climate_payload: dict, observed: dict, forecast: dict, geo: di
                 + ["sato_agro_phenology_table_v1"]
             )
         )
-    elif climate_payload.get("days_window") == 1:
-        scoring_sources = list(
-            dict.fromkeys(
-                (observed.get("sources_used") or [])
-                + ["open_meteo_forecast"]
-                + [source for source in (geo.get("sources_used") or []) if source in {"snet_servicio_suelos_pais", "snet_perspectivas_clima_servicio"}]
-                + (official.get("sources_used") or [])
-                + ["sato_agro_phenology_table_v1"]
-            )
-        )
     else:
+        weather_sources = (forecast.get("sources_used") or ["open_meteo_forecast"]) if climate_payload.get("forecast_window") else (
+            (observed.get("sources_used") or []) + ["open_meteo_forecast"]
+        )
         scoring_sources = list(
             dict.fromkeys(
-                (forecast.get("sources_used") or ["open_meteo_forecast"])
+                weather_sources
                 + [source for source in (geo.get("sources_used") or []) if source in {"snet_servicio_suelos_pais", "snet_perspectivas_clima_servicio"}]
                 + (official.get("sources_used") or [])
                 + ["sato_agro_phenology_table_v1"]
             )
         )
-    return {"scoring_sources": scoring_sources, "context_sources": context_sources}
+    return {"scoring_sources": scoring_sources, "context_sources": context_sources, "model_default_inputs": model_default_inputs}
 
 
 def _get_rainfall() -> tuple[list[dict], bool, str]:
@@ -896,34 +902,46 @@ def build_runtime_llm_context(arguments: dict) -> tuple[dict, dict, int]:
 
 
 def explain_recommendation(payload: dict) -> dict:
-    risk = payload.get("risk_assessment") or {}
-    official = payload.get("official_context") or {}
-    plant = payload.get("plant_state") or {}
-    recommendations = payload.get("recommendations") or []
+    if not isinstance(payload, dict):
+        payload = {}
+    risk = payload.get("risk_assessment") if isinstance(payload.get("risk_assessment"), dict) else {}
+    official = payload.get("official_context") if isinstance(payload.get("official_context"), dict) else {}
+    plant = payload.get("plant_state") if isinstance(payload.get("plant_state"), dict) else {}
+    recommendations = payload.get("recommendations") if isinstance(payload.get("recommendations"), list) else []
 
     phase = plant.get("phase") or "fase estimada"
     level = risk.get("risk_level") or "ATENCION"
-    confidence = risk.get("confidence") or "media"
+    horizon_confidence = risk.get("horizon_confidence") or risk.get("confidence") or "media"
+    data_quality_confidence = risk.get("data_quality_confidence")
     factor_bits = []
-    for factor in risk.get("risk_factors") or []:
+    for factor in (risk.get("risk_factors") if isinstance(risk.get("risk_factors"), list) else []):
+        if not isinstance(factor, dict):
+            continue
         label = factor.get("label")
         state = factor.get("state")
         if label and state:
             factor_bits.append(f"{label.lower()} {state}")
     factor_text = ", ".join(factor_bits[:3]) if factor_bits else "senal climatica relevante"
 
+    confidence_text = f"confianza de horizonte {horizon_confidence}"
+    if data_quality_confidence and data_quality_confidence != horizon_confidence:
+        confidence_text += f" y calidad de datos {data_quality_confidence}"
+
     summary = (
-        f"Tu cultivo esta en {phase}. El riesgo preventivo es {level} con confianza {confidence} "
+        f"Tu cultivo esta en {phase}. El riesgo preventivo es {level} con {confidence_text} "
         f"porque el backend detecta {factor_text}."
     )
+    if risk.get("assumptions") or risk.get("input_warnings"):
+        summary += " La evaluacion incluye supuestos o advertencias de datos que deben revisarse."
     climate_state = risk.get("climate_state") or {}
     if risk.get("horizon") == "gt_16_days" or climate_state.get("rain") == "escenario estacional":
         summary += " Esta evaluacion es un escenario estacional, no un pronostico puntual de lluvia en parcela."
     if official.get("canicula_2026_watch"):
         summary += " Ademas, existe vigilancia oficial por canicula o periodos secos en 2026."
-    secondary_alerts = risk.get("secondary_alerts") or []
+    secondary_alerts = risk.get("secondary_alerts") if isinstance(risk.get("secondary_alerts"), list) else []
     if secondary_alerts:
-        alert_text = secondary_alerts[0].get("message") or "hay una alerta secundaria relevante."
+        first_alert = secondary_alerts[0] if isinstance(secondary_alerts[0], dict) else {}
+        alert_text = first_alert.get("message") or "hay una alerta secundaria relevante."
         summary += f" Alerta secundaria: {alert_text}"
     if recommendations:
         summary += " Acciones sugeridas: " + " ".join(recommendations[:3])

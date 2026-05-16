@@ -49,6 +49,8 @@ def weather_forecast():
         _validate_supported_location(lat, lon)
         target_date = request.args.get("target_date", type=str)
         target = _parse_request_date(target_date, "target_date") if target_date else datetime.now(EL_SALVADOR_TZ).date()
+        if target < datetime.now(EL_SALVADOR_TZ).date():
+            return invalid_request("target_date cannot be earlier than today for weather forecast")
     except ValueError as exc:
         return invalid_request(str(exc))
     data, meta = get_weather_forecast(lat, lon, target)

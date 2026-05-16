@@ -632,6 +632,13 @@ def build_recommendations(
             actions.append("Proteger grano o material cosechado y revisar secado si hubo lluvia fuerte.")
         return actions
 
+    if level == "NORMAL":
+        if "EXCESO_LLUVIA_COSECHA" in secondary_alert_ids:
+            actions.append("Revisar acame, encharcamiento y condiciones de secado por lluvia fuerte en maduracion o cosecha.")
+        else:
+            actions.append("Mantener monitoreo normal.")
+        return actions
+
     if dominant == "water_deficit" or level in {"PREVENIR", "CRITICO"}:
         actions.append("Revisar humedad del suelo.")
         actions.append("Aportar agua si es posible.")

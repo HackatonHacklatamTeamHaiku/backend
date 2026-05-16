@@ -98,6 +98,31 @@ class RiskEngineTests(unittest.TestCase):
         self.assertNotIn("Aportar agua", joined)
         self.assertNotIn("fertilizar", joined)
 
+    def test_normal_level_uses_monitoring_recommendation_only(self):
+        assessment = build_assessment(
+            {
+                "crop": "maiz",
+                "sowing_date": "2026-05-01",
+                "target_date": "2026-05-16",
+                "lat": 13.69,
+                "lon": -89.21,
+                "rain_sum_mm": 20.0,
+                "et0_sum_mm": 5.0,
+                "days_window": 1,
+                "dry_days": 0,
+                "temp_max_c": 28.0,
+                "wind_max_kmh": 10.0,
+                "et0_mm_day": 3.5,
+                "soil": "favorable",
+                "seasonal": "normal",
+                "canicula_watch": False,
+            },
+            reference_date=date(2026, 5, 16),
+        )
+
+        self.assertEqual(assessment.risk_level, "NORMAL")
+        self.assertEqual(assessment.recommendations, ["Mantener monitoreo normal."])
+
     def test_maturity_heavy_rain_alert_adds_harvest_recommendation(self):
         assessment = build_assessment(
             {

@@ -21,6 +21,19 @@ def llm_context():
 @bp.route("/explain", methods=["POST"])
 def llm_explain():
     payload = request.get_json(silent=True) or {}
-    if "risk_assessment" not in payload:
-        return jsonify({"error": "risk_assessment is required"}), 400
+    if not isinstance(payload, dict):
+        return invalid_request("JSON body must be an object")
+    risk_assessment = payload.get("risk_assessment")
+    if not isinstance(risk_assessment, dict):
+        return invalid_request("risk_assessment must be an object")
+    for field in ("risk_factors", "secondary_alerts"):
+        if field in risk_assessment and not isinstance(risk_assessment[field], list):
+            return invalid_request(f"risk_assessment.{field} must be a list")
+        if any(not isinstance(item, dict) for item in risk_assessment.get(field) or []):
+            return invalid_request(f"risk_assessment.{field} items must be objects")
+    if "recommendations" in payload and not isinstance(payload["recommendations"], list):
+        return invalid_request("recommendations must be a list")
+    for field in ("official_context", "plant_state"):
+        if field in payload and not isinstance(payload[field], dict):
+            return invalid_request(f"{field} must be an object")
     return jsonify({"data": explain_recommendation(payload)})

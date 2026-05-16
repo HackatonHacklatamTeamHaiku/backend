@@ -71,6 +71,13 @@ def _parse_request_date(value: str, field_name: str) -> date:
 
 
 def _parse_coordinate(value: str, field_name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{field_name} must be a finite decimal number")
+    if isinstance(value, (int, float)):
+        parsed = float(value)
+        if not math.isfinite(parsed):
+            raise ValueError(f"{field_name} must be a finite decimal number")
+        return parsed
     if not isinstance(value, str) or not COORDINATE_RE.fullmatch(value):
         raise ValueError(f"{field_name} must be a finite decimal number")
     try:
@@ -374,6 +381,8 @@ def get_phenology_context(crop: str, sowing_date: str, target_date: str | None =
     target = datetime.strptime(target_date, "%Y-%m-%d").date() if target_date else reference_date
     sowing = datetime.strptime(sowing_date, "%Y-%m-%d").date()
     days_after_sowing = (target - sowing).days
+    if days_after_sowing < 0:
+        raise ValueError("target_date cannot be earlier than sowing_date")
     phase_code, phase = phase_for(crop, days_after_sowing)
 
     max_susceptibility = max(

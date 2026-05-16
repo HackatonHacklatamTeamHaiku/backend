@@ -112,11 +112,68 @@ class ManifestRouteTests(unittest.TestCase):
             tool_names,
             [
                 "getRiskAssessment",
+                "getWeatherObserved",
                 "getOfficialContext",
                 "getPhenologyContext",
+                "buildRuntimeContext",
                 "explainRecommendation",
             ],
         )
+
+    def test_ai_tools_reject_invalid_official_context_date(self):
+        response = self.app.post(
+            "/api/v1/ai/tools/call",
+            json={"tool_name": "getOfficialContext", "arguments": {"target_date": "2026-99-99"}},
+        )
+        self.assertEqual(response.status_code, 400)
+        body = response.get_json()
+        self.assertEqual(body["meta"]["upstream_status"], "invalid_request")
+        self.assertIn("target_date", body["error"])
+
+    def test_ai_tools_reject_invalid_phenology_inputs(self):
+        cases = [
+            {"crop": "bad", "sowing_date": "2026-05-01"},
+            {"crop": "maiz", "sowing_date": "2026-99-99"},
+            {"crop": "maiz", "sowing_date": "2026-05-10", "target_date": "2026-05-01"},
+        ]
+        for arguments in cases:
+            response = self.app.post(
+                "/api/v1/ai/tools/call",
+                json={"tool_name": "getPhenologyContext", "arguments": arguments},
+            )
+            self.assertEqual(response.status_code, 400)
+            body = response.get_json()
+            self.assertEqual(body["meta"]["upstream_status"], "invalid_request")
+
+    @patch("routes.ai_tools.get_weather_observed")
+    def test_ai_tools_get_weather_observed(self, mocked):
+        mocked.return_value = ({"source_type": "observado"}, {"cached": True, "upstream_status": "ok"})
+        response = self.app.post(
+            "/api/v1/ai/tools/call",
+            json={"tool_name": "getWeatherObserved", "arguments": {"lat": 13.69, "lon": -89.21}},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["result"]["source_type"], "observado")
+
+    def test_ai_tools_get_weather_observed_rejects_invalid_location(self):
+        response = self.app.post(
+            "/api/v1/ai/tools/call",
+            json={"tool_name": "getWeatherObserved", "arguments": {"lat": 0, "lon": 0}},
+        )
+        self.assertEqual(response.status_code, 400)
+        body = response.get_json()
+        self.assertEqual(body["meta"]["upstream_status"], "invalid_request")
+
+    def test_ai_tools_call_rejects_non_object_arguments(self):
+        response = self.app.post(
+            "/api/v1/ai/tools/call",
+            json={"tool_name": "getOfficialContext", "arguments": "bad"},
+        )
+        self.assertEqual(response.status_code, 400)
+        body = response.get_json()
+        self.assertEqual(body["meta"]["upstream_status"], "invalid_request")
+        self.assertIn("arguments", body["error"])
 
     @patch("routes.llm.build_runtime_llm_context")
     def test_llm_context_exposes_runtime_context_keys(self, mocked):

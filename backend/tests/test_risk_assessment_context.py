@@ -75,8 +75,8 @@ class RiskAssessmentContextTests(unittest.TestCase):
                 {
                     "crop": "maiz",
                     "sowing_date": today.isoformat(),
-                    "lat": "13.69",
-                    "lon": "-89.21",
+                    "lat": 13.69,
+                    "lon": -89.21,
                     "target_date": target.isoformat(),
                 }
             )

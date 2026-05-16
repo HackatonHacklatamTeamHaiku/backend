@@ -95,6 +95,27 @@ class ManifestRouteTests(unittest.TestCase):
         body = response.get_json()
         self.assertIn("current_datetime", body["data"])
 
+    @patch("routes.llm.generate_chat_reply")
+    def test_llm_chat_route(self, mocked):
+        mocked.return_value = (
+            {"reply": "Tu maiz va bien.", "tool_calls": []},
+            {"cached": False, "stale": False, "upstream_status": "ok", "fetched_at": "2026-05-16T10:30:00-06:00"},
+            200,
+        )
+        response = self.app.post(
+            "/api/llm/chat",
+            json={
+                "message": "como va mi maiz",
+                "crop": "maiz",
+                "sowing_date": "2026-05-10",
+                "lat": 13.8,
+                "lon": -89.18,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["data"]["reply"], "Tu maiz va bien.")
+
     def test_retired_v1_observations_route_returns_404(self):
         response = self.app.get("/api/v1/observations/current")
         self.assertEqual(response.status_code, 404)

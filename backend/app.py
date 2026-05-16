@@ -76,6 +76,7 @@ def create_app() -> Flask:
                 "/api/risk/assessment?crop=&sowing_date=&lat=&lon=",
                 "/api/llm/context",
                 "/api/llm/explain",
+                "/api/llm/chat",
                 "/api/v1/documents/latest",
                 "/api/v1/ai/tools/manifest",
                 "/api/v1/ai/tools/call",

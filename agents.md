@@ -61,6 +61,7 @@ This means the repo already contains:
 - a reusable risk engine
 - routes aligned to the updated manifest
 - a generic AI tool surface
+- a backend-managed OpenRouter chat layer
 - scripts to apply and verify the cloud schema
 
 ---
@@ -112,7 +113,7 @@ Important route files:
 - `backend/routes/risk.py`
   - `/api/risk/assessment`
 - `backend/routes/llm.py`
-  - `/api/llm/context`, `/api/llm/explain`
+  - `/api/llm/context`, `/api/llm/chat`, `/api/llm/explain`
 - `backend/routes/ai_tools.py`
   - generic LLM tool manifest + dispatcher
 - `backend/routes/canonical.py`
@@ -122,6 +123,10 @@ Important services:
 
 - `backend/services/manifest_context.py`
   - orchestrates observed weather, forecast, geo context, and risk inputs
+- `backend/services/openrouter_llm.py`
+  - OpenRouter chat orchestration and semantic tool loop
+- `backend/services/semantic_tools.py`
+  - shared semantic tool definitions and execution
 - `backend/services/open_meteo_forecast.py`
   - short-range forecast integration
 - `backend/services/snet_rainfall.py`
@@ -205,6 +210,7 @@ For new integrations, prefer:
 - `/api/geo/context`
 - `/api/risk/assessment`
 - `/api/llm/context`
+- `/api/llm/chat`
 - `/api/llm/explain`
 
 The older `/api/v1/*` routes still exist and remain useful for compatibility, but they are no longer the best default for new product work.
@@ -213,10 +219,12 @@ The older `/api/v1/*` routes still exist and remain useful for compatibility, bu
 
 The backend exposes:
 
+- `POST /api/llm/chat`
 - `GET /api/v1/ai/tools/manifest`
 - `POST /api/v1/ai/tools/call`
 
-If an assistant needs backend capabilities, start there before inventing a custom protocol.
+If the product needs one backend-managed chat contract, start with `/api/llm/chat`.
+If an external assistant needs raw tool access, use `/api/v1/ai/tools/*`.
 
 ### 6. Keep Supabase behind the backend
 
@@ -278,6 +286,8 @@ Important nuances:
   - explainable risk output for crop, sowing date, and location
 - `GET /api/llm/context`
   - runtime context contract for assistants
+- `POST /api/llm/chat`
+  - backend-managed chat entrypoint with OpenRouter + semantic tool loop
 - `POST /api/llm/explain`
   - backend-generated plain-language explanation from structured context
 
@@ -298,18 +308,12 @@ The generic function-calling interface is:
 - `GET /api/v1/ai/tools/manifest`
 - `POST /api/v1/ai/tools/call`
 
-Tool names now include both legacy and manifest-oriented operations, including:
+The public semantic tool layer includes:
 
 - `getRiskAssessment`
 - `getOfficialContext`
 - `getPhenologyContext`
-- `buildRuntimeContext`
 - `explainRecommendation`
-- `get_stations`
-- `get_current_features`
-- `get_latest_documents`
-- `get_location_context`
-- `get_agro_advisory`
 
 Use cases:
 
@@ -317,6 +321,9 @@ Use cases:
 - location-aware weather questions
 - explainable agronomic risk questions
 - building assistant context before generation
+- external MCP or custom tool-calling integrations
+
+For product chat inside the backend, prefer `/api/llm/chat`.
 
 Do not use embeddings as the source of truth for fresh numeric values.
 
@@ -430,6 +437,7 @@ The repo already solves:
 - soil and monthly outlook context assembly
 - manifest-aligned risk assessment
 - AI function-calling manifest + dispatcher
+- backend-managed OpenRouter chat
 - Supabase connection and schema bootstrap
 
 ---
@@ -467,15 +475,17 @@ Prefer these routes first:
 - `/api/geo/context`
 - `/api/risk/assessment`
 - `/api/llm/context`
+- `/api/llm/chat`
 
-Use `/api/v1/documents/latest` only for document discovery and `/api/v1/ai/tools/*` only for tool-based assistant integrations.
+Use `/api/v1/documents/latest` only for document discovery and `/api/v1/ai/tools/*` only for external tool-based assistant integrations.
 
 ### If you are building an LLM integration
 
 Start with:
 
+- `/api/llm/chat` if you want the backend to own model routing and tool orchestration
 - `/api/v1/ai/tools/manifest`
-- `/api/v1/ai/tools/call`
+- `/api/v1/ai/tools/call` if you are building your own external tool-calling loop
 
 Then add RAG only for document interpretation, not for live structured values.
 
@@ -539,6 +549,7 @@ Useful checks:
 - `GET /api/weather/observed?lat=13.69&lon=-89.21`
 - `GET /api/geo/context?lat=13.69&lon=-89.21&target_date=2026-08-15`
 - `GET /api/risk/assessment?crop=maiz&sowing_date=2026-05-20&lat=13.69&lon=-89.21&target_date=2026-08-15`
+- `POST /api/llm/chat`
 - `GET /api/v1/ai/tools/manifest`
 - `python backend/scripts/verify_database.py`
 
@@ -572,6 +583,7 @@ Think of this repo as:
 - a climate-data adapter layer
 - plus an explainable risk engine
 - plus an AI-ready tool layer
+- plus a backend-managed OpenRouter chat layer
 - plus a Supabase-backed application core
 
 Right now:

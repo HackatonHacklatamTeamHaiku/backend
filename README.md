@@ -60,6 +60,7 @@ The backend **proxies, normalizes, and caches** all upstream data so the fronten
 | `GET` | `/api/geo/context?lat=13.69&lon=-89.21` | Manifest-aligned geo context bundle |
 | `GET` | `/api/risk/assessment?crop=maiz&sowing_date=2026-05-20&lat=13.69&lon=-89.21` | Manifest-aligned explainable risk assessment |
 | `GET` | `/api/llm/context?...` | Runtime LLM context contract |
+| `POST` | `/api/llm/chat` | Backend-managed chat with OpenRouter + semantic tool loop |
 | `POST` | `/api/llm/explain` | Backend-generated plain-language explanation |
 | `GET` | `/api/v1/documents/latest` | Compatibility route for latest forecast and bulletin documents |
 | `GET` | `/api/v1/ai/tools/manifest` | Compatibility LLM tool manifest |
@@ -120,7 +121,34 @@ curl http://127.0.0.1:5000/health
 
 # Risk assessment
 curl "http://127.0.0.1:5000/api/risk/assessment?crop=maiz&sowing_date=2026-05-20&lat=13.69&lon=-89.21&target_date=2026-08-15"
+
+# Chat
+curl -X POST "http://127.0.0.1:5000/api/llm/chat" \
+  -H "Content-Type: application/json" \
+  -d "{\"message\":\"como va mi maiz\",\"crop\":\"maiz\",\"sowing_date\":\"2026-05-10\",\"lat\":13.8,\"lon\":-89.1833,\"target_date\":\"2026-05-16\"}"
 ```
+
+### OpenRouter
+
+The backend now supports backend-managed chat through OpenRouter.
+
+Expected environment variables:
+
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_MODEL` (optional if frontend always sends `model`)
+- `OPENROUTER_FALLBACK_MODELS`
+- `LLM_SYSTEM_PROMPT_PATH` (optional)
+
+Current expected product behavior:
+
+- frontend may send `model` to `/api/llm/chat`
+- backend routes to that model first
+- backend keeps `mistralai/mistral-medium-3.1` as fallback
+- backend owns the semantic tool loop using:
+  - `getRiskAssessment`
+  - `getOfficialContext`
+  - `getPhenologyContext`
+  - `explainRecommendation`
 
 ---
 
@@ -136,7 +164,7 @@ ClimateAi/
 │   ├── architecture/
 │   │   └── backend-hybrid-shape.md     # Canonical backend shape for frontend + AI
 │   ├── ai/
-│   │   └── llm-function-calling-spec.md# LLM tool contract
+│   │   └── llm-function-calling-spec.md# LLM tool + chat contract
 │   ├── data-sources/
 │   │   ├── snet-api-roadmap.md         # Verified upstream source roadmap
 │   │   ├── snet-latest-2026-endpoints.md
@@ -151,6 +179,8 @@ ClimateAi/
     ├── models/
     │   └── schemas.py                  # Dataclass response schemas
     ├── services/
+    │   ├── openrouter_llm.py          # OpenRouter chat orchestration
+    │   ├── semantic_tools.py          # Shared semantic tool execution
     │   ├── snet_temperature.py         # Fetch live temp data
     │   ├── snet_wind.py                # Fetch live wind data
     │   ├── snet_forecast_48h.py        # Fetch 48h forecast HTML

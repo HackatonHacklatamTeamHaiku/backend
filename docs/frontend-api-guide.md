@@ -15,6 +15,7 @@ Para UI nueva, usa estas rutas:
 - `GET /api/geo/context`
 - `GET /api/risk/assessment`
 - `GET /api/llm/context`
+- `POST /api/llm/chat`
 - `POST /api/llm/explain`
 
 Rutas de compatibilidad que todavía existen:
@@ -564,7 +565,93 @@ Uso frontend:
 
 ---
 
-## 9. AI Tools — manifest
+## 9. Chat LLM
+
+```http
+POST /api/llm/chat
+Content-Type: application/json
+```
+
+Body mínimo útil:
+
+```json
+{
+  "message": "como va mi maiz",
+  "crop": "maiz",
+  "sowing_date": "2026-05-10",
+  "lat": 13.8,
+  "lon": -89.1833,
+  "target_date": "2026-05-16"
+}
+```
+
+Body recomendado:
+
+```json
+{
+  "message": "como va mi maiz",
+  "model": "openai/gpt-5.4-pro",
+  "crop": "maiz",
+  "sowing_date": "2026-05-10",
+  "lat": 13.8,
+  "lon": -89.1833,
+  "target_date": "2026-05-16",
+  "conversation": [
+    { "role": "user", "content": "sembré el 10 de mayo" },
+    { "role": "assistant", "content": "Entendido." }
+  ]
+}
+```
+
+Importante:
+
+- `message` es obligatorio
+- `model` es opcional y puede venir del selector de frontend
+- si frontend envía `model`, el backend lo usa primero
+- el backend mantiene fallback a `mistralai/mistral-medium-3.1`
+- esta ruta ya hace tool calling internamente; el frontend no necesita orquestar tools manualmente
+
+Shape estable:
+
+```json
+{
+  "data": {
+    "reply": "Tu maiz va con riesgo preventivo alto...",
+    "runtime_context": {},
+    "tool_calls": [
+      {
+        "tool_name": "getRiskAssessment",
+        "arguments": {},
+        "status": 200,
+        "meta": {}
+      }
+    ],
+    "model": "openai/gpt-5.4-pro",
+    "requested_model": "openai/gpt-5.4-pro",
+    "routing_models": [
+      "openai/gpt-5.4-pro",
+      "mistralai/mistral-medium-3.1"
+    ],
+    "finish_reason": "stop",
+    "openrouter_metadata": {}
+  },
+  "meta": {
+    "cached": false,
+    "stale": false,
+    "upstream_status": "ok"
+  }
+}
+```
+
+Uso frontend:
+
+- chat principal del producto
+- selector de modelo desde UI
+- depuración opcional con `tool_calls`
+
+---
+
+## 10. AI Tools — manifest
 
 ```http
 GET /api/v1/ai/tools/manifest
@@ -586,7 +673,7 @@ Uso frontend:
 
 ---
 
-## 10. AI Tools — dispatcher
+## 11. AI Tools — dispatcher
 
 ```http
 POST /api/v1/ai/tools/call
@@ -670,7 +757,7 @@ No bases un agente nuevo en tools viejas como:
 
 ---
 
-## 11. Flujo recomendado para frontend
+## 12. Flujo recomendado para frontend
 
 ```text
 1. App init
@@ -687,17 +774,20 @@ No bases un agente nuevo en tools viejas como:
    GET /api/weather/forecast?lat=X&lon=Y&target_date=X
 
 5. Chat / asistente
-   GET /api/v1/ai/tools/manifest
-   POST /api/v1/ai/tools/call
+   POST /api/llm/chat
 
 6. Explicación simple
    GET /api/risk/assessment
    POST /api/llm/explain
+
+7. Integración externa tipo MCP o agente con function calling propio
+   GET /api/v1/ai/tools/manifest
+   POST /api/v1/ai/tools/call
 ```
 
 ---
 
-## 12. Política de `meta`
+## 13. Política de `meta`
 
 Todas las respuestas incluyen `meta`.
 
@@ -711,12 +801,15 @@ Todas las respuestas incluyen `meta`.
 
 ---
 
-## 13. Resumen para el agente de frontend
+## 14. Resumen para el agente de frontend
 
 Si el agente va a construir UI y wiring de datos, estas son las reglas:
 
 - usar la superficie `/api/weather`, `/api/geo`, `/api/risk`, `/api/llm`
-- usar `/api/v1/ai/tools/*` solo para el agente conversacional
+- usar `/api/llm/chat` para el chat principal del producto
+- permitir `model` opcional si la UI expone selector
+- asumir fallback backend a `mistralai/mistral-medium-3.1`
+- usar `/api/v1/ai/tools/*` solo para integraciones externas, MCP o function calling propio
 - usar `/api/v1/documents/latest` solo para documentos/RAG
 - no apoyarse en rutas v1 retiradas
 - tratar `gt_16_days` como escenario, no forecast puntual

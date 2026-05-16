@@ -249,5 +249,6 @@ class AgroRiskAssessment:
     recommendations: list[str] = field(default_factory=list)
     secondary_alerts: list[SecondaryAlert] = field(default_factory=list)
     sources_used: list[str] = field(default_factory=list)
+    derived_inputs: list[str] = field(default_factory=list)
     assumptions: list[str] = field(default_factory=list)
     input_warnings: list[str] = field(default_factory=list)

@@ -2,21 +2,18 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from services.manifest_context import build_runtime_llm_context, explain_recommendation, get_official_context
+from routes.request_validation import empty_param_error, invalid_request, repeated_param_error
+from services.manifest_context import build_runtime_llm_context, explain_recommendation
 
 bp = Blueprint("llm", __name__, url_prefix="/api/llm")
 
 
 @bp.route("/context")
 def llm_context():
-    target_date = request.args.get("target_date")
-    if not request.args.get("crop") or not request.args.get("sowing_date") or request.args.get("lat") is None or request.args.get("lon") is None:
-        # If the caller only wants official snippets, return a minimal context.
-        if target_date:
-            from datetime import datetime
-
-            context = get_official_context(datetime.strptime(target_date, "%Y-%m-%d").date())
-            return jsonify({"data": {"official_context": context}, "meta": {"cached": True, "stale": False, "upstream_status": "ok"}})
+    repeated_error = repeated_param_error(request.args, ["crop", "sowing_date", "lat", "lon", "target_date"])
+    empty_error = empty_param_error(request.args, ["crop", "sowing_date", "lat", "lon", "target_date"])
+    if repeated_error or empty_error:
+        return invalid_request(repeated_error or empty_error)
     data, meta, status = build_runtime_llm_context(request.args.to_dict())
     return jsonify({"data": data, "meta": meta}), status
 
@@ -24,6 +21,19 @@ def llm_context():
 @bp.route("/explain", methods=["POST"])
 def llm_explain():
     payload = request.get_json(silent=True) or {}
-    if "risk_assessment" not in payload:
-        return jsonify({"error": "risk_assessment is required"}), 400
+    if not isinstance(payload, dict):
+        return invalid_request("JSON body must be an object")
+    risk_assessment = payload.get("risk_assessment")
+    if not isinstance(risk_assessment, dict):
+        return invalid_request("risk_assessment must be an object")
+    for field in ("risk_factors", "secondary_alerts"):
+        if field in risk_assessment and not isinstance(risk_assessment[field], list):
+            return invalid_request(f"risk_assessment.{field} must be a list")
+        if any(not isinstance(item, dict) for item in risk_assessment.get(field) or []):
+            return invalid_request(f"risk_assessment.{field} items must be objects")
+    if "recommendations" in payload and not isinstance(payload["recommendations"], list):
+        return invalid_request("recommendations must be a list")
+    for field in ("official_context", "plant_state"):
+        if field in payload and not isinstance(payload[field], dict):
+            return invalid_request(f"{field} must be an object")
     return jsonify({"data": explain_recommendation(payload)})

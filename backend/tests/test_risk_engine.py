@@ -8,8 +8,7 @@ from pathlib import Path
 from normalizers.risk import build_assessment
 
 
-ROOT = Path(__file__).resolve().parents[3]
-LAB_SAMPLES = ROOT / "infra---data-I-plus-D" / "lab" / "risk_validation_samples.json"
+LAB_SAMPLES = Path(__file__).parent / "fixtures" / "risk_validation_samples.json"
 
 
 class RiskEngineTests(unittest.TestCase):
@@ -70,6 +69,85 @@ class RiskEngineTests(unittest.TestCase):
         self.assertEqual(assessment.risk_level_base, "ATENCION")
         self.assertEqual(assessment.risk_level, "PREVENIR")
         self.assertEqual(assessment.risk_overrides[0].id, "CRITICAL_PHASE_FLOOR")
+
+    def test_done_phase_does_not_recommend_active_management(self):
+        assessment = build_assessment(
+            {
+                "crop": "frijol",
+                "sowing_date": "2026-02-20",
+                "target_date": "2026-05-16",
+                "lat": 13.69,
+                "lon": -89.21,
+                "rain_sum_mm": 0.0,
+                "et0_sum_mm": 5.0,
+                "days_window": 1,
+                "dry_days": 1,
+                "temp_max_c": 33.0,
+                "wind_max_kmh": 20.0,
+                "et0_mm_day": 5.0,
+                "soil": "neutral",
+                "seasonal": "normal",
+                "canicula_watch": False,
+            },
+            reference_date=date(2026, 5, 16),
+        )
+
+        self.assertEqual(assessment.plant_state.phase_code, "DONE")
+        joined = " ".join(assessment.recommendations)
+        self.assertIn("Ciclo cerrado", joined)
+        self.assertNotIn("Aportar agua", joined)
+        self.assertNotIn("fertilizar", joined)
+
+    def test_normal_level_uses_monitoring_recommendation_only(self):
+        assessment = build_assessment(
+            {
+                "crop": "maiz",
+                "sowing_date": "2026-05-01",
+                "target_date": "2026-05-16",
+                "lat": 13.69,
+                "lon": -89.21,
+                "rain_sum_mm": 20.0,
+                "et0_sum_mm": 5.0,
+                "days_window": 1,
+                "dry_days": 0,
+                "temp_max_c": 28.0,
+                "wind_max_kmh": 10.0,
+                "et0_mm_day": 3.5,
+                "soil": "favorable",
+                "seasonal": "normal",
+                "canicula_watch": False,
+            },
+            reference_date=date(2026, 5, 16),
+        )
+
+        self.assertEqual(assessment.risk_level, "NORMAL")
+        self.assertEqual(assessment.recommendations, ["Mantener monitoreo normal."])
+
+    def test_maturity_heavy_rain_alert_adds_harvest_recommendation(self):
+        assessment = build_assessment(
+            {
+                "crop": "maiz",
+                "sowing_date": "2026-02-09",
+                "target_date": "2026-05-16",
+                "lat": 13.69,
+                "lon": -89.21,
+                "rain_sum_mm": 30.0,
+                "et0_sum_mm": 6.0,
+                "days_window": 1,
+                "dry_days": 0,
+                "temp_max_c": 29.0,
+                "wind_max_kmh": 12.0,
+                "et0_mm_day": 3.5,
+                "soil": "neutral",
+                "seasonal": "normal",
+                "canicula_watch": False,
+            },
+            reference_date=date(2026, 5, 16),
+        )
+
+        self.assertEqual(assessment.climate_state.rain, "lluvia fuerte")
+        self.assertEqual(assessment.secondary_alerts[0].id, "EXCESO_LLUVIA_COSECHA")
+        self.assertTrue(any("lluvia fuerte" in item for item in assessment.recommendations))
 
 
 if __name__ == "__main__":

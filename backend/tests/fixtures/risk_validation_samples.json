@@ -1,0 +1,997 @@
+{
+  "model_version": "sato_agro_mvp_formula_lab_2026_05_16",
+  "weights": {
+    "water_deficit": 0.4,
+    "heat_stress": 0.2,
+    "evap_stress": 0.1,
+    "soil_factor": 0.15,
+    "seasonal_factor": 0.15
+  },
+  "horizon_confidence": {
+    "present": "alta",
+    "1_3_days": "media_alta",
+    "4_7_days": "media",
+    "8_16_days": "media_baja",
+    "gt_16_days": "baja"
+  },
+  "soil_factors": {
+    "favorable": 0.2,
+    "neutral": 0.5,
+    "unfavorable": 1.0
+  },
+  "seasonal_base": {
+    "arriba_lo_normal": 0.1,
+    "normal": 0.3,
+    "bajo_lo_normal": 0.7,
+    "canicula_o_sequia_fuerte": 1.0
+  },
+  "susceptibility_matrices": {
+    "maiz": {
+      "VE": {
+        "phase": "Germinacion/emergencia",
+        "water": 1.0,
+        "heat": 0.6,
+        "evaporation": 0.6,
+        "soil": 0.85,
+        "seasonal": 0.5
+      },
+      "V1_V6": {
+        "phase": "Vegetativo temprano",
+        "water": 0.6,
+        "heat": 0.5,
+        "evaporation": 0.5,
+        "soil": 0.7,
+        "seasonal": 0.5
+      },
+      "V7_VT": {
+        "phase": "Vegetativo avanzado/prefloracion",
+        "water": 0.85,
+        "heat": 0.7,
+        "evaporation": 0.7,
+        "soil": 0.75,
+        "seasonal": 0.7
+      },
+      "VT_R1": {
+        "phase": "Floracion/polinizacion",
+        "water": 1.0,
+        "heat": 1.0,
+        "evaporation": 0.85,
+        "soil": 0.75,
+        "seasonal": 0.85
+      },
+      "R2_R4": {
+        "phase": "Llenado de grano",
+        "water": 0.85,
+        "heat": 0.8,
+        "evaporation": 0.7,
+        "soil": 0.65,
+        "seasonal": 0.65
+      },
+      "R5_R6": {
+        "phase": "Maduracion",
+        "water": 0.4,
+        "heat": 0.4,
+        "evaporation": 0.4,
+        "soil": 0.4,
+        "seasonal": 0.3
+      },
+      "DONE": {
+        "phase": "Cosecha/ciclo cerrado",
+        "water": 0.2,
+        "heat": 0.2,
+        "evaporation": 0.2,
+        "soil": 0.2,
+        "seasonal": 0.2
+      }
+    },
+    "frijol": {
+      "V0_V1": {
+        "phase": "Germinacion/emergencia",
+        "water": 1.0,
+        "heat": 0.7,
+        "evaporation": 0.6,
+        "soil": 0.85,
+        "seasonal": 0.5
+      },
+      "V2_V4": {
+        "phase": "Vegetativo",
+        "water": 0.6,
+        "heat": 0.6,
+        "evaporation": 0.5,
+        "soil": 0.7,
+        "seasonal": 0.5
+      },
+      "R5": {
+        "phase": "Prefloracion",
+        "water": 0.85,
+        "heat": 0.85,
+        "evaporation": 0.7,
+        "soil": 0.75,
+        "seasonal": 0.7
+      },
+      "R6": {
+        "phase": "Floracion/cuajado",
+        "water": 1.0,
+        "heat": 1.0,
+        "evaporation": 0.85,
+        "soil": 0.75,
+        "seasonal": 0.85
+      },
+      "R7": {
+        "phase": "Formacion de vainas",
+        "water": 1.0,
+        "heat": 0.9,
+        "evaporation": 0.8,
+        "soil": 0.75,
+        "seasonal": 0.85
+      },
+      "R8": {
+        "phase": "Llenado de grano",
+        "water": 0.85,
+        "heat": 0.8,
+        "evaporation": 0.7,
+        "soil": 0.65,
+        "seasonal": 0.65
+      },
+      "R9": {
+        "phase": "Maduracion/cosecha",
+        "water": 0.4,
+        "heat": 0.4,
+        "evaporation": 0.4,
+        "soil": 0.4,
+        "seasonal": 0.3
+      },
+      "DONE": {
+        "phase": "Cosecha/ciclo cerrado",
+        "water": 0.2,
+        "heat": 0.2,
+        "evaporation": 0.2,
+        "soil": 0.2,
+        "seasonal": 0.2
+      }
+    }
+  },
+  "scenario_count": 10,
+  "results": [
+    {
+      "scenario_id": "maiz_vegetativo_lluvia_moderada",
+      "scenario_name": "Maiz vegetativo con lluvia moderada",
+      "horizon": "present",
+      "confidence": "alta",
+      "plant_state": {
+        "crop": "maiz",
+        "days_after_sowing": 25,
+        "phase": "Vegetativo temprano",
+        "phase_code": "V1_V6",
+        "susceptibility": {
+          "water": 0.6,
+          "heat": 0.5,
+          "evaporation": 0.5,
+          "soil": 0.7,
+          "seasonal": 0.5
+        }
+      },
+      "climate_state": {
+        "rain_sum_mm": 14.0,
+        "et0_sum_mm": 16.0,
+        "days_window": 3,
+        "dry_days": 1,
+        "temp_max_c": 32.0,
+        "wind_max_kmh": 16.0,
+        "et0_mm_day": 5.3,
+        "soil": "neutral",
+        "seasonal": "normal",
+        "canicula_watch": false
+      },
+      "risk_factors": [
+        {
+          "id": "soil_factor",
+          "label": "Suelo",
+          "climate_value": 0.5,
+          "plant_susceptibility": 0.7,
+          "weight": 0.15,
+          "contribution": 0.0525,
+          "evidence": "El suelo modifica la retencion util para raices."
+        },
+        {
+          "id": "water_deficit",
+          "label": "Deficit hidrico",
+          "climate_value": 0.1875,
+          "plant_susceptibility": 0.6,
+          "weight": 0.4,
+          "contribution": 0.045,
+          "evidence": "Lluvia acumulada baja frente a ET0 y dias secos."
+        },
+        {
+          "id": "seasonal_factor",
+          "label": "Contexto estacional",
+          "climate_value": 0.3,
+          "plant_susceptibility": 0.5,
+          "weight": 0.15,
+          "contribution": 0.0225,
+          "evidence": "Perspectiva seca o vigilancia de canicula aumenta el prior."
+        },
+        {
+          "id": "evap_stress",
+          "label": "Evaporacion/viento",
+          "climate_value": 0.4333,
+          "plant_susceptibility": 0.5,
+          "weight": 0.1,
+          "contribution": 0.0217,
+          "evidence": "Viento o ET0 diario elevan secado rapido."
+        },
+        {
+          "id": "heat_stress",
+          "label": "Calor",
+          "climate_value": 0.0,
+          "plant_susceptibility": 0.5,
+          "weight": 0.2,
+          "contribution": 0.0,
+          "evidence": "Temperatura maxima cercana o superior al umbral del cultivo."
+        }
+      ],
+      "risk_score": 0.1417,
+      "risk_level": "NORMAL",
+      "recommendation_summary": "mantener monitoreo normal y repetir evaluacion.",
+      "main_climate_signals": "lluvia 14.0 mm/3d; ET0 16.0 mm; secos 1/3; Tmax 32.0 C; viento 16.0 km/h; suelo neutral; estacional normal",
+      "plausibility_note": "Riesgo bajo-medio por fase vegetativa y lluvia parcial.",
+      "plausible": true
+    },
+    {
+      "scenario_id": "maiz_floracion_sequia_calor_canicula",
+      "scenario_name": "Maiz floracion con sequia, calor y canicula",
+      "horizon": "1_3_days",
+      "confidence": "media_alta",
+      "plant_state": {
+        "crop": "maiz",
+        "days_after_sowing": 68,
+        "phase": "Floracion/polinizacion",
+        "phase_code": "VT_R1",
+        "susceptibility": {
+          "water": 1.0,
+          "heat": 1.0,
+          "evaporation": 0.85,
+          "soil": 0.75,
+          "seasonal": 0.85
+        }
+      },
+      "climate_state": {
+        "rain_sum_mm": 0.0,
+        "et0_sum_mm": 19.0,
+        "days_window": 3,
+        "dry_days": 3,
+        "temp_max_c": 38.0,
+        "wind_max_kmh": 30.0,
+        "et0_mm_day": 6.3,
+        "soil": "unfavorable",
+        "seasonal": "bajo_lo_normal",
+        "canicula_watch": true
+      },
+      "risk_factors": [
+        {
+          "id": "water_deficit",
+          "label": "Deficit hidrico",
+          "climate_value": 1.0,
+          "plant_susceptibility": 1.0,
+          "weight": 0.4,
+          "contribution": 0.4,
+          "evidence": "Lluvia acumulada baja frente a ET0 y dias secos."
+        },
+        {
+          "id": "heat_stress",
+          "label": "Calor",
+          "climate_value": 1.0,
+          "plant_susceptibility": 1.0,
+          "weight": 0.2,
+          "contribution": 0.2,
+          "evidence": "Temperatura maxima cercana o superior al umbral del cultivo."
+        },
+        {
+          "id": "seasonal_factor",
+          "label": "Contexto estacional",
+          "climate_value": 0.9,
+          "plant_susceptibility": 0.85,
+          "weight": 0.15,
+          "contribution": 0.1147,
+          "evidence": "Perspectiva seca o vigilancia de canicula aumenta el prior."
+        },
+        {
+          "id": "soil_factor",
+          "label": "Suelo",
+          "climate_value": 1.0,
+          "plant_susceptibility": 0.75,
+          "weight": 0.15,
+          "contribution": 0.1125,
+          "evidence": "El suelo modifica la retencion util para raices."
+        },
+        {
+          "id": "evap_stress",
+          "label": "Evaporacion/viento",
+          "climate_value": 0.7667,
+          "plant_susceptibility": 0.85,
+          "weight": 0.1,
+          "contribution": 0.0652,
+          "evidence": "Viento o ET0 diario elevan secado rapido."
+        }
+      ],
+      "risk_score": 0.8924,
+      "risk_level": "CRITICO",
+      "recommendation_summary": "revisar humedad y aportar agua si es posible; evitar fertilizar o aplicar insumos en horas calientes; mantener cobertura y evitar aplicaciones con viento; priorizar monitoreo tecnico por fase critica.",
+      "main_climate_signals": "lluvia 0.0 mm/3d; ET0 19.0 mm; secos 3/3; Tmax 38.0 C; viento 30.0 km/h; suelo unfavorable; estacional bajo_lo_normal + vigilancia canicula",
+      "plausibility_note": "Debe ser el caso mas severo por floracion y multiples senales secas.",
+      "plausible": true
+    },
+    {
+      "scenario_id": "maiz_llenado_baja_lluvia",
+      "scenario_name": "Maiz llenado de grano con lluvia baja",
+      "horizon": "4_7_days",
+      "confidence": "media",
+      "plant_state": {
+        "crop": "maiz",
+        "days_after_sowing": 88,
+        "phase": "Llenado de grano",
+        "phase_code": "R2_R4",
+        "susceptibility": {
+          "water": 0.85,
+          "heat": 0.8,
+          "evaporation": 0.7,
+          "soil": 0.65,
+          "seasonal": 0.65
+        }
+      },
+      "climate_state": {
+        "rain_sum_mm": 3.0,
+        "et0_sum_mm": 31.0,
+        "days_window": 7,
+        "dry_days": 5,
+        "temp_max_c": 35.0,
+        "wind_max_kmh": 22.0,
+        "et0_mm_day": 4.8,
+        "soil": "neutral",
+        "seasonal": "bajo_lo_normal",
+        "canicula_watch": false
+      },
+      "risk_factors": [
+        {
+          "id": "water_deficit",
+          "label": "Deficit hidrico",
+          "climate_value": 0.8465,
+          "plant_susceptibility": 0.85,
+          "weight": 0.4,
+          "contribution": 0.2878,
+          "evidence": "Lluvia acumulada baja frente a ET0 y dias secos."
+        },
+        {
+          "id": "seasonal_factor",
+          "label": "Contexto estacional",
+          "climate_value": 0.7,
+          "plant_susceptibility": 0.65,
+          "weight": 0.15,
+          "contribution": 0.0683,
+          "evidence": "Perspectiva seca o vigilancia de canicula aumenta el prior."
+        },
+        {
+          "id": "heat_stress",
+          "label": "Calor",
+          "climate_value": 0.4,
+          "plant_susceptibility": 0.8,
+          "weight": 0.2,
+          "contribution": 0.064,
+          "evidence": "Temperatura maxima cercana o superior al umbral del cultivo."
+        },
+        {
+          "id": "soil_factor",
+          "label": "Suelo",
+          "climate_value": 0.5,
+          "plant_susceptibility": 0.65,
+          "weight": 0.15,
+          "contribution": 0.0488,
+          "evidence": "El suelo modifica la retencion util para raices."
+        },
+        {
+          "id": "evap_stress",
+          "label": "Evaporacion/viento",
+          "climate_value": 0.35,
+          "plant_susceptibility": 0.7,
+          "weight": 0.1,
+          "contribution": 0.0245,
+          "evidence": "Viento o ET0 diario elevan secado rapido."
+        }
+      ],
+      "risk_score": 0.4934,
+      "risk_level": "ATENCION",
+      "recommendation_summary": "revisar humedad y aportar agua si es posible; evitar fertilizar o aplicar insumos en horas calientes.",
+      "main_climate_signals": "lluvia 3.0 mm/7d; ET0 31.0 mm; secos 5/7; Tmax 35.0 C; viento 22.0 km/h; suelo neutral; estacional bajo_lo_normal",
+      "plausibility_note": "Riesgo preventivo por deficit durante llenado.",
+      "plausible": true
+    },
+    {
+      "scenario_id": "maiz_madurez_lluvia_fuerte",
+      "scenario_name": "Maiz madurez con lluvia fuerte",
+      "horizon": "present",
+      "confidence": "alta",
+      "plant_state": {
+        "crop": "maiz",
+        "days_after_sowing": 108,
+        "phase": "Maduracion",
+        "phase_code": "R5_R6",
+        "susceptibility": {
+          "water": 0.4,
+          "heat": 0.4,
+          "evaporation": 0.4,
+          "soil": 0.4,
+          "seasonal": 0.3
+        }
+      },
+      "climate_state": {
+        "rain_sum_mm": 42.0,
+        "et0_sum_mm": 6.0,
+        "days_window": 1,
+        "dry_days": 0,
+        "temp_max_c": 29.0,
+        "wind_max_kmh": 12.0,
+        "et0_mm_day": 3.5,
+        "soil": "favorable",
+        "seasonal": "arriba_lo_normal",
+        "canicula_watch": false
+      },
+      "risk_factors": [
+        {
+          "id": "soil_factor",
+          "label": "Suelo",
+          "climate_value": 0.2,
+          "plant_susceptibility": 0.4,
+          "weight": 0.15,
+          "contribution": 0.012,
+          "evidence": "El suelo modifica la retencion util para raices."
+        },
+        {
+          "id": "seasonal_factor",
+          "label": "Contexto estacional",
+          "climate_value": 0.1,
+          "plant_susceptibility": 0.3,
+          "weight": 0.15,
+          "contribution": 0.0045,
+          "evidence": "Perspectiva seca o vigilancia de canicula aumenta el prior."
+        },
+        {
+          "id": "water_deficit",
+          "label": "Deficit hidrico",
+          "climate_value": 0.0,
+          "plant_susceptibility": 0.4,
+          "weight": 0.4,
+          "contribution": 0.0,
+          "evidence": "Lluvia acumulada baja frente a ET0 y dias secos."
+        },
+        {
+          "id": "heat_stress",
+          "label": "Calor",
+          "climate_value": 0.0,
+          "plant_susceptibility": 0.4,
+          "weight": 0.2,
+          "contribution": 0.0,
+          "evidence": "Temperatura maxima cercana o superior al umbral del cultivo."
+        },
+        {
+          "id": "evap_stress",
+          "label": "Evaporacion/viento",
+          "climate_value": 0.0,
+          "plant_susceptibility": 0.4,
+          "weight": 0.1,
+          "contribution": 0.0,
+          "evidence": "Viento o ET0 diario elevan secado rapido."
+        }
+      ],
+      "risk_score": 0.0165,
+      "risk_level": "NORMAL",
+      "recommendation_summary": "mantener monitoreo normal y repetir evaluacion.",
+      "main_climate_signals": "lluvia 42.0 mm/1d; ET0 6.0 mm; secos 0/1; Tmax 29.0 C; viento 12.0 km/h; suelo favorable; estacional arriba_lo_normal",
+      "plausibility_note": "Riesgo bajo de sequia, aunque la UI debe advertir posible cosecha/secado fuera de este modelo.",
+      "plausible": true
+    },
+    {
+      "scenario_id": "frijol_vegetativo_normal",
+      "scenario_name": "Frijol vegetativo normal",
+      "horizon": "present",
+      "confidence": "alta",
+      "plant_state": {
+        "crop": "frijol",
+        "days_after_sowing": 21,
+        "phase": "Vegetativo",
+        "phase_code": "V2_V4",
+        "susceptibility": {
+          "water": 0.6,
+          "heat": 0.6,
+          "evaporation": 0.5,
+          "soil": 0.7,
+          "seasonal": 0.5
+        }
+      },
+      "climate_state": {
+        "rain_sum_mm": 12.0,
+        "et0_sum_mm": 14.0,
+        "days_window": 3,
+        "dry_days": 1,
+        "temp_max_c": 29.0,
+        "wind_max_kmh": 14.0,
+        "et0_mm_day": 4.2,
+        "soil": "neutral",
+        "seasonal": "normal",
+        "canicula_watch": false
+      },
+      "risk_factors": [
+        {
+          "id": "soil_factor",
+          "label": "Suelo",
+          "climate_value": 0.5,
+          "plant_susceptibility": 0.7,
+          "weight": 0.15,
+          "contribution": 0.0525,
+          "evidence": "El suelo modifica la retencion util para raices."
+        },
+        {
+          "id": "water_deficit",
+          "label": "Deficit hidrico",
+          "climate_value": 0.2,
+          "plant_susceptibility": 0.6,
+          "weight": 0.4,
+          "contribution": 0.048,
+          "evidence": "Lluvia acumulada baja frente a ET0 y dias secos."
+        },
+        {
+          "id": "seasonal_factor",
+          "label": "Contexto estacional",
+          "climate_value": 0.3,
+          "plant_susceptibility": 0.5,
+          "weight": 0.15,
+          "contribution": 0.0225,
+          "evidence": "Perspectiva seca o vigilancia de canicula aumenta el prior."
+        },
+        {
+          "id": "evap_stress",
+          "label": "Evaporacion/viento",
+          "climate_value": 0.0667,
+          "plant_susceptibility": 0.5,
+          "weight": 0.1,
+          "contribution": 0.0033,
+          "evidence": "Viento o ET0 diario elevan secado rapido."
+        },
+        {
+          "id": "heat_stress",
+          "label": "Calor",
+          "climate_value": 0.0,
+          "plant_susceptibility": 0.6,
+          "weight": 0.2,
+          "contribution": 0.0,
+          "evidence": "Temperatura maxima cercana o superior al umbral del cultivo."
+        }
+      ],
+      "risk_score": 0.1263,
+      "risk_level": "NORMAL",
+      "recommendation_summary": "mantener monitoreo normal y repetir evaluacion.",
+      "main_climate_signals": "lluvia 12.0 mm/3d; ET0 14.0 mm; secos 1/3; Tmax 29.0 C; viento 14.0 km/h; suelo neutral; estacional normal",
+      "plausibility_note": "Riesgo bajo-medio con monitoreo rutinario.",
+      "plausible": true
+    },
+    {
+      "scenario_id": "frijol_prefloracion_seco",
+      "scenario_name": "Frijol prefloracion seco",
+      "horizon": "1_3_days",
+      "confidence": "media_alta",
+      "plant_state": {
+        "crop": "frijol",
+        "days_after_sowing": 33,
+        "phase": "Prefloracion",
+        "phase_code": "R5",
+        "susceptibility": {
+          "water": 0.85,
+          "heat": 0.85,
+          "evaporation": 0.7,
+          "soil": 0.75,
+          "seasonal": 0.7
+        }
+      },
+      "climate_state": {
+        "rain_sum_mm": 1.0,
+        "et0_sum_mm": 16.5,
+        "days_window": 3,
+        "dry_days": 2,
+        "temp_max_c": 31.0,
+        "wind_max_kmh": 20.0,
+        "et0_mm_day": 5.5,
+        "soil": "unfavorable",
+        "seasonal": "bajo_lo_normal",
+        "canicula_watch": false
+      },
+      "risk_factors": [
+        {
+          "id": "water_deficit",
+          "label": "Deficit hidrico",
+          "climate_value": 0.8576,
+          "plant_susceptibility": 0.85,
+          "weight": 0.4,
+          "contribution": 0.2916,
+          "evidence": "Lluvia acumulada baja frente a ET0 y dias secos."
+        },
+        {
+          "id": "soil_factor",
+          "label": "Suelo",
+          "climate_value": 1.0,
+          "plant_susceptibility": 0.75,
+          "weight": 0.15,
+          "contribution": 0.1125,
+          "evidence": "El suelo modifica la retencion util para raices."
+        },
+        {
+          "id": "seasonal_factor",
+          "label": "Contexto estacional",
+          "climate_value": 0.7,
+          "plant_susceptibility": 0.7,
+          "weight": 0.15,
+          "contribution": 0.0735,
+          "evidence": "Perspectiva seca o vigilancia de canicula aumenta el prior."
+        },
+        {
+          "id": "evap_stress",
+          "label": "Evaporacion/viento",
+          "climate_value": 0.5,
+          "plant_susceptibility": 0.7,
+          "weight": 0.1,
+          "contribution": 0.035,
+          "evidence": "Viento o ET0 diario elevan secado rapido."
+        },
+        {
+          "id": "heat_stress",
+          "label": "Calor",
+          "climate_value": 0.2,
+          "plant_susceptibility": 0.85,
+          "weight": 0.2,
+          "contribution": 0.034,
+          "evidence": "Temperatura maxima cercana o superior al umbral del cultivo."
+        }
+      ],
+      "risk_score": 0.5466,
+      "risk_level": "PREVENIR",
+      "recommendation_summary": "revisar humedad y aportar agua si es posible; mantener cobertura y evitar aplicaciones con viento.",
+      "main_climate_signals": "lluvia 1.0 mm/3d; ET0 16.5 mm; secos 2/3; Tmax 31.0 C; viento 20.0 km/h; suelo unfavorable; estacional bajo_lo_normal",
+      "plausibility_note": "Debe subir a prevenir antes de floracion.",
+      "plausible": true
+    },
+    {
+      "scenario_id": "frijol_floracion_calor_sin_lluvia",
+      "scenario_name": "Frijol floracion/cuaje con calor y sin lluvia",
+      "horizon": "present",
+      "confidence": "alta",
+      "plant_state": {
+        "crop": "frijol",
+        "days_after_sowing": 38,
+        "phase": "Floracion/cuajado",
+        "phase_code": "R6",
+        "susceptibility": {
+          "water": 1.0,
+          "heat": 1.0,
+          "evaporation": 0.85,
+          "soil": 0.75,
+          "seasonal": 0.85
+        }
+      },
+      "climate_state": {
+        "rain_sum_mm": 0.0,
+        "et0_sum_mm": 18.0,
+        "days_window": 3,
+        "dry_days": 3,
+        "temp_max_c": 35.0,
+        "wind_max_kmh": 26.0,
+        "et0_mm_day": 6.0,
+        "soil": "neutral",
+        "seasonal": "bajo_lo_normal",
+        "canicula_watch": true
+      },
+      "risk_factors": [
+        {
+          "id": "water_deficit",
+          "label": "Deficit hidrico",
+          "climate_value": 1.0,
+          "plant_susceptibility": 1.0,
+          "weight": 0.4,
+          "contribution": 0.4,
+          "evidence": "Lluvia acumulada baja frente a ET0 y dias secos."
+        },
+        {
+          "id": "heat_stress",
+          "label": "Calor",
+          "climate_value": 1.0,
+          "plant_susceptibility": 1.0,
+          "weight": 0.2,
+          "contribution": 0.2,
+          "evidence": "Temperatura maxima cercana o superior al umbral del cultivo."
+        },
+        {
+          "id": "seasonal_factor",
+          "label": "Contexto estacional",
+          "climate_value": 0.9,
+          "plant_susceptibility": 0.85,
+          "weight": 0.15,
+          "contribution": 0.1147,
+          "evidence": "Perspectiva seca o vigilancia de canicula aumenta el prior."
+        },
+        {
+          "id": "evap_stress",
+          "label": "Evaporacion/viento",
+          "climate_value": 0.6667,
+          "plant_susceptibility": 0.85,
+          "weight": 0.1,
+          "contribution": 0.0567,
+          "evidence": "Viento o ET0 diario elevan secado rapido."
+        },
+        {
+          "id": "soil_factor",
+          "label": "Suelo",
+          "climate_value": 0.5,
+          "plant_susceptibility": 0.75,
+          "weight": 0.15,
+          "contribution": 0.0562,
+          "evidence": "El suelo modifica la retencion util para raices."
+        }
+      ],
+      "risk_score": 0.8276,
+      "risk_level": "CRITICO",
+      "recommendation_summary": "revisar humedad y aportar agua si es posible; evitar fertilizar o aplicar insumos en horas calientes; mantener cobertura y evitar aplicaciones con viento; priorizar monitoreo tecnico por fase critica.",
+      "main_climate_signals": "lluvia 0.0 mm/3d; ET0 18.0 mm; secos 3/3; Tmax 35.0 C; viento 26.0 km/h; suelo neutral; estacional bajo_lo_normal + vigilancia canicula",
+      "plausibility_note": "Caso critico por frijol en R6 con calor extremo y deficit total.",
+      "plausible": true
+    },
+    {
+      "scenario_id": "frijol_vainas_seco_canicula",
+      "scenario_name": "Frijol formacion de vainas seco/canicula",
+      "horizon": "4_7_days",
+      "confidence": "media",
+      "plant_state": {
+        "crop": "frijol",
+        "days_after_sowing": 48,
+        "phase": "Formacion de vainas",
+        "phase_code": "R7",
+        "susceptibility": {
+          "water": 1.0,
+          "heat": 0.9,
+          "evaporation": 0.8,
+          "soil": 0.75,
+          "seasonal": 0.85
+        }
+      },
+      "climate_state": {
+        "rain_sum_mm": 2.0,
+        "et0_sum_mm": 35.0,
+        "days_window": 7,
+        "dry_days": 6,
+        "temp_max_c": 33.0,
+        "wind_max_kmh": 28.0,
+        "et0_mm_day": 5.8,
+        "soil": "unfavorable",
+        "seasonal": "bajo_lo_normal",
+        "canicula_watch": true
+      },
+      "risk_factors": [
+        {
+          "id": "water_deficit",
+          "label": "Deficit hidrico",
+          "climate_value": 0.9171,
+          "plant_susceptibility": 1.0,
+          "weight": 0.4,
+          "contribution": 0.3669,
+          "evidence": "Lluvia acumulada baja frente a ET0 y dias secos."
+        },
+        {
+          "id": "seasonal_factor",
+          "label": "Contexto estacional",
+          "climate_value": 0.9,
+          "plant_susceptibility": 0.85,
+          "weight": 0.15,
+          "contribution": 0.1147,
+          "evidence": "Perspectiva seca o vigilancia de canicula aumenta el prior."
+        },
+        {
+          "id": "soil_factor",
+          "label": "Suelo",
+          "climate_value": 1.0,
+          "plant_susceptibility": 0.75,
+          "weight": 0.15,
+          "contribution": 0.1125,
+          "evidence": "El suelo modifica la retencion util para raices."
+        },
+        {
+          "id": "heat_stress",
+          "label": "Calor",
+          "climate_value": 0.6,
+          "plant_susceptibility": 0.9,
+          "weight": 0.2,
+          "contribution": 0.108,
+          "evidence": "Temperatura maxima cercana o superior al umbral del cultivo."
+        },
+        {
+          "id": "evap_stress",
+          "label": "Evaporacion/viento",
+          "climate_value": 0.65,
+          "plant_susceptibility": 0.8,
+          "weight": 0.1,
+          "contribution": 0.052,
+          "evidence": "Viento o ET0 diario elevan secado rapido."
+        }
+      ],
+      "risk_score": 0.7541,
+      "risk_level": "CRITICO",
+      "recommendation_summary": "revisar humedad y aportar agua si es posible; evitar fertilizar o aplicar insumos en horas calientes; mantener cobertura y evitar aplicaciones con viento; priorizar monitoreo tecnico por fase critica.",
+      "main_climate_signals": "lluvia 2.0 mm/7d; ET0 35.0 mm; secos 6/7; Tmax 33.0 C; viento 28.0 km/h; suelo unfavorable; estacional bajo_lo_normal + vigilancia canicula",
+      "plausibility_note": "Alto/preventivo fuerte por R7 y canicula.",
+      "plausible": true
+    },
+    {
+      "scenario_id": "frijol_llenado_estres_moderado",
+      "scenario_name": "Frijol llenado de grano con estres moderado",
+      "horizon": "1_3_days",
+      "confidence": "media_alta",
+      "plant_state": {
+        "crop": "frijol",
+        "days_after_sowing": 60,
+        "phase": "Llenado de grano",
+        "phase_code": "R8",
+        "susceptibility": {
+          "water": 0.85,
+          "heat": 0.8,
+          "evaporation": 0.7,
+          "soil": 0.65,
+          "seasonal": 0.65
+        }
+      },
+      "climate_state": {
+        "rain_sum_mm": 5.0,
+        "et0_sum_mm": 17.0,
+        "days_window": 3,
+        "dry_days": 2,
+        "temp_max_c": 32.0,
+        "wind_max_kmh": 18.0,
+        "et0_mm_day": 4.8,
+        "soil": "neutral",
+        "seasonal": "normal",
+        "canicula_watch": false
+      },
+      "risk_factors": [
+        {
+          "id": "water_deficit",
+          "label": "Deficit hidrico",
+          "climate_value": 0.6941,
+          "plant_susceptibility": 0.85,
+          "weight": 0.4,
+          "contribution": 0.236,
+          "evidence": "Lluvia acumulada baja frente a ET0 y dias secos."
+        },
+        {
+          "id": "heat_stress",
+          "label": "Calor",
+          "climate_value": 0.4,
+          "plant_susceptibility": 0.8,
+          "weight": 0.2,
+          "contribution": 0.064,
+          "evidence": "Temperatura maxima cercana o superior al umbral del cultivo."
+        },
+        {
+          "id": "soil_factor",
+          "label": "Suelo",
+          "climate_value": 0.5,
+          "plant_susceptibility": 0.65,
+          "weight": 0.15,
+          "contribution": 0.0488,
+          "evidence": "El suelo modifica la retencion util para raices."
+        },
+        {
+          "id": "seasonal_factor",
+          "label": "Contexto estacional",
+          "climate_value": 0.3,
+          "plant_susceptibility": 0.65,
+          "weight": 0.15,
+          "contribution": 0.0292,
+          "evidence": "Perspectiva seca o vigilancia de canicula aumenta el prior."
+        },
+        {
+          "id": "evap_stress",
+          "label": "Evaporacion/viento",
+          "climate_value": 0.2667,
+          "plant_susceptibility": 0.7,
+          "weight": 0.1,
+          "contribution": 0.0187,
+          "evidence": "Viento o ET0 diario elevan secado rapido."
+        }
+      ],
+      "risk_score": 0.3967,
+      "risk_level": "ATENCION",
+      "recommendation_summary": "revisar humedad y aportar agua si es posible; evitar fertilizar o aplicar insumos en horas calientes.",
+      "main_climate_signals": "lluvia 5.0 mm/3d; ET0 17.0 mm; secos 2/3; Tmax 32.0 C; viento 18.0 km/h; suelo neutral; estacional normal",
+      "plausibility_note": "Riesgo medio/preventivo bajo por llenado sensible con estres parcial.",
+      "plausible": true
+    },
+    {
+      "scenario_id": "escenario_estacional_gt16_dias",
+      "scenario_name": "Escenario estacional mayor a 16 dias",
+      "horizon": "gt_16_days",
+      "confidence": "baja",
+      "plant_state": {
+        "crop": "maiz",
+        "days_after_sowing": 63,
+        "phase": "Floracion/polinizacion",
+        "phase_code": "VT_R1",
+        "susceptibility": {
+          "water": 1.0,
+          "heat": 1.0,
+          "evaporation": 0.85,
+          "soil": 0.75,
+          "seasonal": 0.85
+        }
+      },
+      "climate_state": {
+        "rain_sum_mm": 18.0,
+        "et0_sum_mm": 92.0,
+        "days_window": 20,
+        "dry_days": 15,
+        "temp_max_c": 36.0,
+        "wind_max_kmh": 24.0,
+        "et0_mm_day": 4.6,
+        "soil": "unfavorable",
+        "seasonal": "bajo_lo_normal",
+        "canicula_watch": true
+      },
+      "risk_factors": [
+        {
+          "id": "water_deficit",
+          "label": "Deficit hidrico",
+          "climate_value": 0.788,
+          "plant_susceptibility": 1.0,
+          "weight": 0.4,
+          "contribution": 0.3152,
+          "evidence": "Lluvia acumulada baja frente a ET0 y dias secos."
+        },
+        {
+          "id": "heat_stress",
+          "label": "Calor",
+          "climate_value": 0.6,
+          "plant_susceptibility": 1.0,
+          "weight": 0.2,
+          "contribution": 0.12,
+          "evidence": "Temperatura maxima cercana o superior al umbral del cultivo."
+        },
+        {
+          "id": "seasonal_factor",
+          "label": "Contexto estacional",
+          "climate_value": 0.9,
+          "plant_susceptibility": 0.85,
+          "weight": 0.15,
+          "contribution": 0.1147,
+          "evidence": "Perspectiva seca o vigilancia de canicula aumenta el prior."
+        },
+        {
+          "id": "soil_factor",
+          "label": "Suelo",
+          "climate_value": 1.0,
+          "plant_susceptibility": 0.75,
+          "weight": 0.15,
+          "contribution": 0.1125,
+          "evidence": "El suelo modifica la retencion util para raices."
+        },
+        {
+          "id": "evap_stress",
+          "label": "Evaporacion/viento",
+          "climate_value": 0.45,
+          "plant_susceptibility": 0.85,
+          "weight": 0.1,
+          "contribution": 0.0383,
+          "evidence": "Viento o ET0 diario elevan secado rapido."
+        }
+      ],
+      "risk_score": 0.7007,
+      "risk_level": "PREVENIR",
+      "recommendation_summary": "revisar humedad y aportar agua si es posible; evitar fertilizar o aplicar insumos en horas calientes; priorizar monitoreo tecnico por fase critica.",
+      "main_climate_signals": "lluvia 18.0 mm/20d; ET0 92.0 mm; secos 15/20; Tmax 36.0 C; viento 24.0 km/h; suelo unfavorable; estacional bajo_lo_normal + vigilancia canicula",
+      "plausibility_note": "Riesgo de escenario alto, pero con confianza baja por horizonte largo.",
+      "plausible": true
+    }
+  ]
+}

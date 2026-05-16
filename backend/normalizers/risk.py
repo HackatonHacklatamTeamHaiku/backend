@@ -251,7 +251,9 @@ class RiskInputs:
     soil: str
     seasonal: str
     canicula_watch: bool
+    scenario_mode: str | None
     sources_used: list[str]
+    derived_inputs: list[str]
     assumptions: list[str]
     input_warnings: list[str]
 
@@ -272,7 +274,9 @@ def infer_horizon(reference_date: date, target_date: date) -> str:
         return "1_3_days"
     if delta_days <= 7:
         return "4_7_days"
-    if delta_days <= 16:
+    # Open-Meteo forecast_days=16 includes today, so the backend has at most
+    # 15 complete future days for tomorrow-through-target risk windows.
+    if delta_days <= 15:
         return "8_16_days"
     return "gt_16_days"
 
@@ -333,6 +337,18 @@ def seasonal_factor(base_name: str, canicula_watch: bool) -> float:
     return clamp(SEASONAL_BASE[base_name] + (0.2 if canicula_watch else 0.0))
 
 
+def seasonal_water_deficit(base_name: str, canicula_watch: bool) -> float:
+    base = {
+        "arriba_lo_normal": 0.20,
+        "normal": 0.40,
+        "bajo_lo_normal": 0.60,
+        "canicula_o_sequia_fuerte": 0.85,
+    }[base_name]
+    if base_name != "canicula_o_sequia_fuerte" and canicula_watch:
+        base += 0.20
+    return clamp(base)
+
+
 def risk_level(score: float) -> str:
     if score < 0.25:
         return "NORMAL"
@@ -359,43 +375,59 @@ def normalize_risk_inputs(
     days_window = int(payload.get("days_window") or default_days_window(horizon))
 
     assumptions = list(payload.get("assumptions") or [])
+    derived_inputs = list(payload.get("derived_inputs") or [])
     input_warnings = list(payload.get("input_warnings") or [])
+    scenario_mode = payload.get("scenario_mode")
+    if scenario_mode is not None:
+        scenario_mode = str(scenario_mode).strip().lower()
+        if scenario_mode not in {"seasonal"}:
+            raise ValueError("scenario_mode must be 'seasonal' when provided")
 
     rain_sum_mm = payload.get("rain_sum_mm")
     if rain_sum_mm is None:
         rain_sum_mm = 0.0
-        assumptions.append(
-            "rain_sum_mm no estaba disponible en el backend; se asumio 0.0 mm hasta integrar lluvia observada/pronosticada."
-        )
+        if scenario_mode != "seasonal":
+            assumptions.append(
+                "rain_sum_mm no estaba disponible en el backend; se asumio 0.0 mm hasta integrar lluvia observada/pronosticada."
+            )
 
     et0_sum_mm = payload.get("et0_sum_mm")
     if et0_sum_mm is None:
-        et0_sum_mm = max(days_window * 4.0, 1.0)
-        assumptions.append(
-            "et0_sum_mm no estaba disponible; se estimo con una demanda base de 4.0 mm/dia para no bloquear el motor MVP."
-        )
+        et0_sum_mm = 0.0 if scenario_mode == "seasonal" else max(days_window * 4.0, 1.0)
+        if scenario_mode != "seasonal":
+            assumptions.append(
+                "et0_sum_mm no estaba disponible; se estimo con una demanda base de 4.0 mm/dia para no bloquear el motor MVP."
+            )
 
     dry_days = payload.get("dry_days")
     if dry_days is None:
-        dry_days = days_window if rain_sum_mm < 1.0 else 0
-        assumptions.append(
-            "dry_days no estaba disponible; se infirio desde rain_sum_mm usando el criterio operativo < 1 mm."
-        )
+        dry_days = 0 if scenario_mode == "seasonal" else days_window if rain_sum_mm < 1.0 else 0
+        if scenario_mode == "seasonal":
+            derived_inputs.append("dry_days no se usa para escenario estacional >16 dias.")
+        else:
+            derived_inputs.append("dry_days inferido desde rain_sum_mm usando el criterio operativo < 1 mm.")
 
     temp_max_c = payload.get("temp_max_c")
     if temp_max_c is None:
-        raise ValueError("temp_max_c is required or must be derivable from canonical observations")
+        if scenario_mode == "seasonal":
+            temp_max_c = 0.0
+        else:
+            raise ValueError("temp_max_c is required or must be derivable from canonical observations")
 
     wind_max_kmh = payload.get("wind_max_kmh")
     if wind_max_kmh is None:
-        raise ValueError("wind_max_kmh is required or must be derivable from canonical observations")
+        if scenario_mode == "seasonal":
+            wind_max_kmh = 0.0
+        else:
+            raise ValueError("wind_max_kmh is required or must be derivable from canonical observations")
 
     et0_mm_day = payload.get("et0_mm_day")
     if et0_mm_day is None:
         et0_mm_day = round(et0_sum_mm / max(days_window, 1), 2)
-        assumptions.append(
-            "et0_mm_day no estaba disponible; se derivo como et0_sum_mm / days_window."
-        )
+        if scenario_mode == "seasonal":
+            derived_inputs.append("et0_mm_day no se usa para escenario estacional >16 dias.")
+        else:
+            derived_inputs.append("et0_mm_day derivado como et0_sum_mm / days_window.")
 
     soil = (payload.get("soil") or "neutral").strip().lower()
     if soil not in SOIL_FACTORS:
@@ -437,28 +469,33 @@ def normalize_risk_inputs(
         soil=soil,
         seasonal=seasonal,
         canicula_watch=canicula_watch,
+        scenario_mode=scenario_mode,
         sources_used=list(payload.get("sources_used") or []),
+        derived_inputs=derived_inputs,
         assumptions=assumptions,
         input_warnings=input_warnings,
     )
 
 
 def calculate_factors(inputs: RiskInputs) -> dict[str, float]:
-    dry_days_ratio = inputs.dry_days / max(inputs.days_window, 1)
-    water_deficit = (
-        0.7 * max(0.0, inputs.et0_sum_mm - inputs.rain_sum_mm) / max(inputs.et0_sum_mm, 1.0)
-        + 0.3 * dry_days_ratio
-    )
+    if inputs.scenario_mode == "seasonal":
+        water_deficit = seasonal_water_deficit(inputs.seasonal, inputs.canicula_watch)
+    else:
+        dry_days_ratio = inputs.dry_days / max(inputs.days_window, 1)
+        water_deficit = (
+            0.7 * max(0.0, inputs.et0_sum_mm - inputs.rain_sum_mm) / max(inputs.et0_sum_mm, 1.0)
+            + 0.3 * dry_days_ratio
+        )
 
     if inputs.crop == "maiz":
         temp_warning, temp_critical = 33.0, 38.0
     else:
         temp_warning, temp_critical = 30.0, 35.0
-    heat_stress = clamp((inputs.temp_max_c - temp_warning) / (temp_critical - temp_warning))
+    heat_stress = 0.0 if inputs.scenario_mode == "seasonal" else clamp((inputs.temp_max_c - temp_warning) / (temp_critical - temp_warning))
 
     wind_score = clamp((inputs.wind_max_kmh - 15.0) / (35.0 - 15.0))
     et0_score = clamp((inputs.et0_mm_day - 4.0) / (7.0 - 4.0))
-    evap_stress = max(wind_score, et0_score)
+    evap_stress = 0.0 if inputs.scenario_mode == "seasonal" else max(wind_score, et0_score)
 
     return {
         "water_deficit": clamp(water_deficit),
@@ -505,8 +542,28 @@ def factor_objects(factors: dict[str, float], plant: dict) -> list[RiskFactorDet
 
 
 def climate_state_labels(inputs: RiskInputs) -> ClimateState:
+    if inputs.scenario_mode == "seasonal":
+        seasonal_label = inputs.seasonal
+        if inputs.canicula_watch and inputs.seasonal != "canicula_o_sequia_fuerte":
+            seasonal_label = f"{inputs.seasonal}_con_vigilancia_canicula"
+        return ClimateState(
+            rain="escenario estacional",
+            temperature="no pronostico puntual",
+            wind_evaporation="no pronostico puntual",
+            soil=inputs.soil,
+            seasonal=seasonal_label,
+            rain_sum_mm=None,
+            et0_sum_mm=None,
+            days_window=inputs.days_window,
+            dry_days=None,
+            temp_max_c=None,
+            wind_max_kmh=None,
+            et0_mm_day=None,
+            canicula_watch=inputs.canicula_watch,
+        )
+
     rain_label = "sin lluvia"
-    if inputs.rain_sum_mm > 30:
+    if inputs.rain_sum_mm >= 30:
         rain_label = "lluvia fuerte"
     elif inputs.rain_sum_mm > 10:
         rain_label = "lluvia potencialmente util"
@@ -562,9 +619,25 @@ def build_recommendations(
     rain_sum_mm: float,
     temp_max_c: float,
     crop: str,
+    scenario_mode: str | None = None,
+    secondary_alerts: list[SecondaryAlert] | None = None,
 ) -> list[str]:
     actions: list[str] = []
     dominant = factors[0].id if factors else None
+    secondary_alert_ids = {item.id for item in (secondary_alerts or [])}
+
+    if phase_code == "DONE":
+        actions.append("Ciclo cerrado; no se generan acciones de manejo activo para este cultivo.")
+        if "EXCESO_LLUVIA_COSECHA" in secondary_alert_ids:
+            actions.append("Proteger grano o material cosechado y revisar secado si hubo lluvia fuerte.")
+        return actions
+
+    if level == "NORMAL":
+        if "EXCESO_LLUVIA_COSECHA" in secondary_alert_ids:
+            actions.append("Revisar acame, encharcamiento y condiciones de secado por lluvia fuerte en maduracion o cosecha.")
+        else:
+            actions.append("Mantener monitoreo normal.")
+        return actions
 
     if dominant == "water_deficit" or level in {"PREVENIR", "CRITICO"}:
         actions.append("Revisar humedad del suelo.")
@@ -577,11 +650,17 @@ def build_recommendations(
     if temp_max_c >= heat_warning:
         actions.append("Evitar fertilizar o aplicar insumos en horas calientes.")
 
-    if rain_sum_mm < 1.0:
+    if scenario_mode == "seasonal" and dominant in {"water_deficit", "seasonal_factor"}:
+        actions.append("Planificar monitoreo por escenario estacional seco o canicula.")
+
+    if scenario_mode != "seasonal" and rain_sum_mm < 1.0:
         actions.append("Conservar humedad y revisar signos de marchitez.")
 
     if phase_code in {"VT_R1", "R6", "R7"} and level in {"PREVENIR", "CRITICO"}:
         actions.append("Priorizar monitoreo tecnico por fase critica.")
+
+    if "EXCESO_LLUVIA_COSECHA" in secondary_alert_ids:
+        actions.append("Revisar acame, encharcamiento y condiciones de secado por lluvia fuerte en maduracion o cosecha.")
 
     if not actions:
         actions.append("Mantener monitoreo normal.")
@@ -618,7 +697,7 @@ def apply_risk_overrides(
         (crop == "maiz" and phase_code == "VT_R1")
         or (crop == "frijol" and phase_code in {"R6", "R7"})
     )
-    if critical_phase and (water_deficit >= 0.60 or heat_stress >= 0.60) and level == "ATENCION":
+    if critical_phase and (water_deficit >= 0.60 or heat_stress >= 0.60) and level in {"NORMAL", "ATENCION"}:
         level = "PREVENIR"
         overrides.append(
             RiskOverride(
@@ -684,6 +763,8 @@ def build_assessment(
     ui_phase_group = None
     if inputs.crop == "frijol" and 41 <= days_after_sowing <= 50:
         ui_phase_group = "Ventana reproductiva critica"
+    elif inputs.crop == "maiz" and 76 <= days_after_sowing <= 80:
+        ui_phase_group = "Transicion floracion/inicio llenado probable"
 
     recommendations = build_recommendations(
         level=final_level,
@@ -692,6 +773,8 @@ def build_assessment(
         rain_sum_mm=inputs.rain_sum_mm,
         temp_max_c=inputs.temp_max_c,
         crop=inputs.crop,
+        scenario_mode=inputs.scenario_mode,
+        secondary_alerts=secondary_alerts,
     )
 
     return AgroRiskAssessment(
@@ -721,6 +804,7 @@ def build_assessment(
         recommendations=recommendations,
         secondary_alerts=secondary_alerts,
         sources_used=inputs.sources_used,
+        derived_inputs=inputs.derived_inputs,
         assumptions=inputs.assumptions,
         input_warnings=inputs.input_warnings,
     )

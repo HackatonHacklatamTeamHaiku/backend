@@ -4,14 +4,16 @@ Composition helpers that align backend responses with the manifest contract.
 
 from __future__ import annotations
 
-from datetime import datetime
+import math
+import re
+from datetime import date, datetime, timedelta
 
 from config import Config
 from normalizers.basins import basin_for_point, normalize_basins
 from normalizers.climate_outlook import normalize_outlook_feature
 from normalizers.municipalities import normalize_municipality_feature
 from normalizers.rainfall import normalize_rainfall
-from normalizers.risk import build_assessment, infer_horizon, phase_for
+from normalizers.risk import build_assessment, default_days_window, infer_horizon, phase_for
 from normalizers.soil import normalize_soil_features
 from routes.canonical import _build_meta, _get_observations
 from services import (
@@ -34,6 +36,15 @@ _forecast_cache = DataCache(ttl=Config.CACHE_TTL_FORECAST_DAILY)
 _outlook_cache = DataCache(ttl=Config.CACHE_TTL_CLIMATE_OUTLOOK)
 _municipality_cache = DataCache(ttl=Config.CACHE_TTL_MUNICIPALITY_LOOKUP)
 
+EL_SALVADOR_BOUNDS = {
+    "lat_min": 13.0,
+    "lat_max": 14.6,
+    "lon_min": -90.3,
+    "lon_max": -87.6,
+}
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+COORDINATE_RE = re.compile(r"^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$")
+
 OUTLOOK_LAYER_BY_MONTH = {
     8: (12, "agosto"),
     9: (13, "septiembre"),
@@ -48,6 +59,117 @@ def _distance_confidence(distance_km: float) -> str:
     if distance_km <= 25:
         return "media"
     return "baja"
+
+
+def _parse_request_date(value: str, field_name: str) -> date:
+    if not isinstance(value, str) or not DATE_RE.fullmatch(value):
+        raise ValueError(f"{field_name} must be a valid date in YYYY-MM-DD format")
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        raise ValueError(f"{field_name} must be a valid date in YYYY-MM-DD format")
+
+
+def _parse_coordinate(value: str, field_name: str) -> float:
+    if not isinstance(value, str) or not COORDINATE_RE.fullmatch(value):
+        raise ValueError(f"{field_name} must be a finite decimal number")
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field_name} must be a finite decimal number")
+    if not math.isfinite(parsed):
+        raise ValueError(f"{field_name} must be a finite decimal number")
+    return parsed
+
+
+def _validate_supported_location(lat: float, lon: float) -> None:
+    if not (
+        EL_SALVADOR_BOUNDS["lat_min"] <= lat <= EL_SALVADOR_BOUNDS["lat_max"]
+        and EL_SALVADOR_BOUNDS["lon_min"] <= lon <= EL_SALVADOR_BOUNDS["lon_max"]
+    ):
+        raise ValueError("lat and lon must be within the supported El Salvador region")
+
+
+def _data_quality_confidence(assumptions: list[str], warnings: list[str]) -> tuple[str, list[str]]:
+    reasons = ["horizon_confidence reflects forecast horizon only."]
+    if assumptions:
+        reasons.append("Some model inputs used explicit assumptions.")
+    if warnings:
+        reasons.append("Some source or context warnings were present.")
+    if assumptions:
+        return "media_baja", reasons
+    if warnings:
+        return "media", reasons
+    return "alta", reasons
+
+
+def _risk_window_weather_from_payload(payload: dict) -> dict:
+    if payload.get("scenario_mode") == "seasonal":
+        return {
+            "source_type": "escenario",
+            "window": None,
+            "rain_sum_mm": None,
+            "et0_sum_mm": None,
+            "days_window": payload.get("days_window"),
+            "dry_days": None,
+            "temp_max_c": None,
+            "wind_max_kmh": None,
+            "et0_mm_day": None,
+            "note": "Escenario estacional sin pronostico puntual diario.",
+        }
+    return {
+        "source_type": "forecast_window" if payload.get("forecast_window") else "observado_modelado",
+        "window": payload.get("forecast_window") or {
+            "start": payload.get("target_date"),
+            "end": payload.get("target_date"),
+            "days": payload.get("days_window"),
+        },
+        "rain_sum_mm": payload.get("rain_sum_mm"),
+        "et0_sum_mm": payload.get("et0_sum_mm"),
+        "days_window": payload.get("days_window"),
+        "dry_days": payload.get("dry_days"),
+        "temp_max_c": payload.get("temp_max_c"),
+        "wind_max_kmh": payload.get("wind_max_kmh"),
+        "et0_mm_day": payload.get("et0_mm_day"),
+    }
+
+
+def _source_roles(climate_payload: dict, observed: dict, forecast: dict, geo: dict, official: dict) -> dict:
+    context_sources = list(
+        dict.fromkeys(
+            (observed.get("sources_used") or [])
+            + (forecast.get("sources_used") or [])
+            + (geo.get("sources_used") or [])
+            + (official.get("sources_used") or [])
+        )
+    )
+    model_default_inputs = []
+    if climate_payload.get("soil") is None:
+        model_default_inputs.append("soil=neutral")
+    if climate_payload.get("seasonal") is None:
+        model_default_inputs.append("seasonal=normal")
+
+    if climate_payload.get("scenario_mode") == "seasonal":
+        scoring_sources = list(
+            dict.fromkeys(
+                [source for source in (geo.get("sources_used") or []) if source in {"snet_servicio_suelos_pais", "snet_perspectivas_clima_servicio"}]
+                + (official.get("sources_used") or [])
+                + ["sato_agro_phenology_table_v1"]
+            )
+        )
+    else:
+        weather_sources = (forecast.get("sources_used") or ["open_meteo_forecast"]) if climate_payload.get("forecast_window") else (
+            (observed.get("sources_used") or []) + ["open_meteo_forecast"]
+        )
+        scoring_sources = list(
+            dict.fromkeys(
+                weather_sources
+                + [source for source in (geo.get("sources_used") or []) if source in {"snet_servicio_suelos_pais", "snet_perspectivas_clima_servicio"}]
+                + (official.get("sources_used") or [])
+                + ["sato_agro_phenology_table_v1"]
+            )
+        )
+    return {"scoring_sources": scoring_sources, "context_sources": context_sources, "model_default_inputs": model_default_inputs}
 
 
 def _get_rainfall() -> tuple[list[dict], bool, str]:
@@ -112,6 +234,72 @@ def _get_forecast(lat: float, lon: float) -> tuple[dict | None, bool, str]:
         if cached is not None:
             return cached, True, _forecast_cache.fetched_at(key) or now_utc_iso()
         return None, False, now_utc_iso()
+
+
+def _forecast_dates(raw: dict) -> list[date]:
+    times = ((raw.get("daily") or {}).get("time") or []) if raw else []
+    return [datetime.strptime(item, "%Y-%m-%d").date() for item in times]
+
+
+def _daily_series(raw: dict, key: str) -> list:
+    return (raw.get("daily") or {}).get(key) or []
+
+
+def _forecast_window_summary(raw: dict, reference_date: date, target_date: date) -> dict:
+    forecast_dates = _forecast_dates(raw)
+    if not forecast_dates:
+        raise ValueError("Open-Meteo forecast daily series is empty")
+    if target_date not in forecast_dates:
+        raise ValueError("target_date is outside Open-Meteo forecast range")
+
+    start_date = reference_date if target_date <= reference_date else reference_date + timedelta(days=1)
+    selected_indexes = [
+        idx
+        for idx, item_date in enumerate(forecast_dates)
+        if start_date <= item_date <= target_date
+    ]
+    if not selected_indexes:
+        raise ValueError("target_date is outside Open-Meteo forecast range")
+
+    precipitation = _daily_series(raw, "precipitation_sum")
+    et0 = _daily_series(raw, "et0_fao_evapotranspiration_sum")
+    temp_max = _daily_series(raw, "temperature_2m_max")
+    wind_max = _daily_series(raw, "wind_speed_10m_max")
+
+    def values(series: list) -> list[float]:
+        return [float(series[idx]) for idx in selected_indexes if idx < len(series) and series[idx] is not None]
+
+    rain_values = values(precipitation)
+    et0_values = values(et0)
+    temp_values = values(temp_max)
+    wind_values = values(wind_max)
+    if not rain_values or not et0_values or not temp_values or not wind_values:
+        raise ValueError("Open-Meteo forecast missing required daily values for risk window")
+
+    days_window = len(selected_indexes)
+    et0_sum_mm = round(sum(et0_values), 4)
+    return {
+        "rain_sum_mm": round(sum(rain_values), 4),
+        "et0_sum_mm": et0_sum_mm,
+        "days_window": days_window,
+        "dry_days": sum(1 for value in rain_values if value < 1.0),
+        "temp_max_c": max(temp_values),
+        "wind_max_kmh": max(wind_values),
+        "et0_mm_day": round(et0_sum_mm / max(days_window, 1), 4),
+        "derived_inputs": [
+            (
+                f"Forecast agregado desde {forecast_dates[selected_indexes[0]].isoformat()} "
+                f"hasta {forecast_dates[selected_indexes[-1]].isoformat()}."
+            ),
+            "dry_days calculado desde precipitation_sum < 1 mm.",
+            "et0_mm_day derivado como et0_sum_mm / days_window.",
+        ],
+        "forecast_window": {
+            "start": forecast_dates[selected_indexes[0]].isoformat(),
+            "end": forecast_dates[selected_indexes[-1]].isoformat(),
+            "days": days_window,
+        },
+    }
 
 
 def _get_outlook(lat: float, lon: float, target_date: datetime.date) -> tuple[dict | None, bool, str, list[str]]:
@@ -321,9 +509,10 @@ def get_weather_forecast(lat: float, lon: float, target_date: datetime.date | No
                 soil_moisture_model = "alta"
 
     data = {
-        "source_type": "pronosticado",
+        "source_type": "pronosticado" if target_in_range else "escenario",
         "location": {"lat": lat, "lon": lon},
-        "target_date": times[idx] if times else target.isoformat(),
+        "target_date": target.isoformat(),
+        "target_in_forecast_range": target_in_range,
         "horizon": infer_horizon(datetime.now(EL_SALVADOR_TZ).date(), target),
         "rain_sum_mm": (daily.get("precipitation_sum") or [None])[idx] if target_in_range else None,
         "rain_probability_max": (daily.get("precipitation_probability_max") or [None])[idx] if target_in_range else None,
@@ -331,8 +520,9 @@ def get_weather_forecast(lat: float, lon: float, target_date: datetime.date | No
         "temp_min_c": (daily.get("temperature_2m_min") or [None])[idx] if target_in_range else None,
         "wind_max_kmh": (daily.get("wind_speed_10m_max") or [None])[idx] if target_in_range else None,
         "et0_sum_mm": (daily.get("et0_fao_evapotranspiration_sum") or [None])[idx] if target_in_range else None,
-        "soil_moisture_model": soil_moisture_model,
-        "sources_used": ["open_meteo_forecast"],
+        "soil_moisture_model": soil_moisture_model if target_in_range else None,
+        "soil_moisture_model_scope": "available_forecast_hourly_window" if target_in_range and soil_moisture_model else None,
+        "sources_used": ["open_meteo_forecast"] if target_in_range else [],
         "warnings": [] if target_in_range else [
             "Open-Meteo solo cubre 1-16 dias; para esta fecha el backend debe tratar el resultado como escenario."
         ],
@@ -445,14 +635,35 @@ def get_risk_assessment(arguments: dict) -> tuple[dict, dict, int]:
         ), 400
 
     reference_date = datetime.now(EL_SALVADOR_TZ).date()
-    target_date = datetime.strptime(arguments.get("target_date"), "%Y-%m-%d").date() if arguments.get("target_date") else reference_date
+    try:
+        parsed_lat = _parse_coordinate(lat, "lat")
+        parsed_lon = _parse_coordinate(lon, "lon")
+        _validate_supported_location(parsed_lat, parsed_lon)
+        parsed_sowing_date = _parse_request_date(sowing_date, "sowing_date")
+        target_date = _parse_request_date(arguments.get("target_date"), "target_date") if arguments.get("target_date") else reference_date
+    except ValueError as exc:
+        return {"error": str(exc)}, _build_meta(
+            cached=False, stale=False, upstream_status="invalid_request", fetched_at=now_utc_iso()
+        ), 400
+
+    if target_date < reference_date:
+        return {"error": "target_date cannot be earlier than today for risk assessment"}, _build_meta(
+            cached=False, stale=False, upstream_status="invalid_request", fetched_at=now_utc_iso()
+        ), 400
+
+    if target_date < parsed_sowing_date:
+        return {"error": "target_date cannot be earlier than sowing_date"}, _build_meta(
+            cached=False, stale=False, upstream_status="invalid_request", fetched_at=now_utc_iso()
+        ), 400
+
     horizon = infer_horizon(reference_date, target_date)
 
-    observed, observed_meta = get_weather_observed(float(lat), float(lon))
-    forecast, forecast_meta = get_weather_forecast(float(lat), float(lon), target_date)
+    observed, observed_meta = get_weather_observed(parsed_lat, parsed_lon)
+    forecast, forecast_meta = get_weather_forecast(parsed_lat, parsed_lon, target_date)
+    raw_forecast, _, _ = _get_forecast(parsed_lat, parsed_lon)
     geo, geo_meta = get_geo_context(
-        float(lat),
-        float(lon),
+        parsed_lat,
+        parsed_lon,
         target_date,
         municipality=arguments.get("municipality"),
         municipality_code=arguments.get("municipality_code"),
@@ -462,10 +673,10 @@ def get_risk_assessment(arguments: dict) -> tuple[dict, dict, int]:
 
     climate_payload = {
         "crop": crop,
-        "sowing_date": sowing_date,
+        "sowing_date": parsed_sowing_date.isoformat(),
         "target_date": target_date.isoformat(),
-        "lat": float(lat),
-        "lon": float(lon),
+        "lat": parsed_lat,
+        "lon": parsed_lon,
         "soil": ((geo.get("soil_context") or {}).get("water_retention_modifier")),
         "seasonal": ((geo.get("climate_outlook_context") or {}).get("dryness_prior")),
         "canicula_watch": official["canicula_2026_watch"],
@@ -487,38 +698,75 @@ def get_risk_assessment(arguments: dict) -> tuple[dict, dict, int]:
     }
 
     if horizon == "present":
+        derived_inputs = []
+        et0_sum_mm = None
+        et0_mm_day = None
+        if raw_forecast:
+            try:
+                today_summary = _forecast_window_summary(raw_forecast, reference_date, reference_date)
+                et0_sum_mm = today_summary["et0_sum_mm"]
+                et0_mm_day = today_summary["et0_mm_day"]
+                derived_inputs.append("ET0 de hoy tomado de Open-Meteo como demanda atmosferica modelada.")
+            except ValueError as exc:
+                climate_payload["input_warnings"].append(str(exc))
+
+        rain_sum_mm = observed.get("rain_recent_mm")
+        dry_days = None
+        if rain_sum_mm is not None:
+            dry_days = 1 if float(rain_sum_mm) < 1.0 else 0
+            derived_inputs.append("dry_days calculado desde lluvia observada 24h < 1 mm.")
+
         climate_payload.update(
             {
-                "rain_sum_mm": observed.get("rain_recent_mm"),
+                "rain_sum_mm": rain_sum_mm,
+                "et0_sum_mm": et0_sum_mm,
+                "days_window": 1,
+                "dry_days": dry_days,
                 "temp_max_c": observed.get("temperature_max_c") or observed.get("temperature_current_c"),
                 "wind_max_kmh": observed.get("wind_speed_kmh"),
+                "et0_mm_day": et0_mm_day,
+                "derived_inputs": derived_inputs,
             }
         )
     elif horizon == "gt_16_days":
         climate_payload.update(
             {
-                "temp_max_c": observed.get("temperature_max_c") or observed.get("temperature_current_c"),
-                "wind_max_kmh": observed.get("wind_speed_kmh"),
+                "scenario_mode": "seasonal",
+                "days_window": 20,
+                "derived_inputs": [
+                    "Escenario estacional calculado sin pronostico puntual de lluvia diaria."
+                ],
             }
         )
         climate_payload["input_warnings"].append(
-            "Para >16 dias el backend usa contexto estacional y fase de planta; no hay pronostico puntual Open-Meteo."
+            "Para esta fecha el backend usa contexto estacional y fase de planta; no hay pronostico puntual Open-Meteo completo."
         )
     else:
-        days_window = 3 if horizon == "1_3_days" else 7 if horizon == "4_7_days" else 16
-        climate_payload.update(
-            {
-                "rain_sum_mm": forecast.get("rain_sum_mm"),
-                "et0_sum_mm": forecast.get("et0_sum_mm"),
-                "days_window": days_window,
-                "temp_max_c": forecast.get("temp_max_c"),
-                "wind_max_kmh": forecast.get("wind_max_kmh"),
-                "et0_mm_day": (
-                    round((forecast.get("et0_sum_mm") or 0.0) / days_window, 2)
-                    if forecast.get("et0_sum_mm") is not None else None
-                ),
-            }
-        )
+        if raw_forecast:
+            try:
+                climate_payload.update(_forecast_window_summary(raw_forecast, reference_date, target_date))
+            except ValueError as exc:
+                climate_payload["input_warnings"].append(str(exc))
+                climate_payload.update(
+                    {
+                        "scenario_mode": "seasonal",
+                        "days_window": default_days_window(horizon),
+                        "derived_inputs": [
+                            "Escenario estacional usado porque el target no tiene pronostico diario Open-Meteo completo."
+                        ],
+                    }
+                )
+        else:
+            climate_payload["input_warnings"].append("No se pudo obtener forecast Open-Meteo para la ventana de riesgo.")
+            climate_payload.update(
+                {
+                    "scenario_mode": "seasonal",
+                    "days_window": default_days_window(horizon),
+                    "derived_inputs": [
+                        "Escenario estacional usado porque no hubo forecast Open-Meteo disponible."
+                    ],
+                }
+            )
 
     try:
         assessment = build_assessment(climate_payload, reference_date=reference_date)
@@ -533,13 +781,23 @@ def get_risk_assessment(arguments: dict) -> tuple[dict, dict, int]:
             ),
         ), 400
 
+    data_quality_confidence, confidence_reasons = _data_quality_confidence(
+        assessment.assumptions,
+        assessment.input_warnings,
+    )
+
     result = {
         **assessment.__dict__,
+        "horizon_confidence": assessment.confidence,
+        "data_quality_confidence": data_quality_confidence,
+        "confidence_reasons": confidence_reasons,
         "plant_state": assessment.plant_state.__dict__,
         "climate_state": assessment.climate_state.__dict__,
         "risk_factors": [item.__dict__ for item in assessment.risk_factors],
         "risk_overrides": [item.__dict__ for item in assessment.risk_overrides],
         "secondary_alerts": [item.__dict__ for item in assessment.secondary_alerts],
+        "risk_window_weather": _risk_window_weather_from_payload(climate_payload),
+        "source_roles": _source_roles(climate_payload, observed, forecast, geo, official),
         "observed_weather": observed,
         "forecast_weather": forecast,
         "geo_context": geo,
@@ -614,15 +872,25 @@ def build_runtime_llm_context(arguments: dict) -> tuple[dict, dict, int]:
         },
         "observed_weather": risk["observed_weather"],
         "forecast_weather": risk["forecast_weather"],
+        "risk_window_weather": risk.get("risk_window_weather"),
         "risk_assessment": {
+            "target_date": risk["target_date"],
+            "horizon": risk["horizon"],
             "risk_score": risk["risk_score"],
+            "risk_level_base": risk.get("risk_level_base"),
             "risk_level": risk["risk_level"],
             "confidence": risk["confidence"],
+            "horizon_confidence": risk.get("horizon_confidence"),
+            "data_quality_confidence": risk.get("data_quality_confidence"),
+            "confidence_reasons": risk.get("confidence_reasons"),
+            "climate_state": risk.get("climate_state"),
             "risk_factors": [
                 {
                     "id": item["id"],
                     "label": item["label"],
                     "state": item["state"],
+                    "climate_value": item.get("climate_value"),
+                    "plant_susceptibility": item.get("plant_susceptibility"),
                     "contribution": item["contribution"],
                     "explanation": item["evidence"],
                 }
@@ -630,6 +898,11 @@ def build_runtime_llm_context(arguments: dict) -> tuple[dict, dict, int]:
             ],
             "risk_overrides": risk["risk_overrides"],
             "secondary_alerts": risk["secondary_alerts"],
+            "sources_used": risk.get("sources_used"),
+            "source_roles": risk.get("source_roles"),
+            "derived_inputs": risk.get("derived_inputs"),
+            "assumptions": risk.get("assumptions"),
+            "input_warnings": risk.get("input_warnings"),
         },
         "recommendations": risk["recommendations"],
         "official_context": risk["official_context"],
@@ -645,16 +918,25 @@ def build_runtime_llm_context(arguments: dict) -> tuple[dict, dict, int]:
 
 
 def explain_recommendation(payload: dict) -> dict:
-    risk = payload.get("risk_assessment") or {}
-    official = payload.get("official_context") or {}
-    plant = payload.get("plant_state") or risk.get("plant_state") or risk.get("phenology") or {}
-    recommendations = payload.get("recommendations") or []
+    if not isinstance(payload, dict):
+        payload = {}
+    risk = payload.get("risk_assessment") if isinstance(payload.get("risk_assessment"), dict) else {}
+    official = payload.get("official_context") if isinstance(payload.get("official_context"), dict) else {}
+    plant = payload.get("plant_state") if isinstance(payload.get("plant_state"), dict) else {}
+    if not plant:
+        plant = risk.get("plant_state") if isinstance(risk.get("plant_state"), dict) else {}
+    if not plant:
+        plant = risk.get("phenology") if isinstance(risk.get("phenology"), dict) else {}
+    recommendations = payload.get("recommendations") if isinstance(payload.get("recommendations"), list) else []
+    if not recommendations:
+        recommendations = risk.get("recommendations") if isinstance(risk.get("recommendations"), list) else []
 
     phase = plant.get("phase_name") or plant.get("phase") or "fase estimada"
     level = risk.get("risk_level") or "ATENCION"
-    confidence = risk.get("confidence") or "media"
+    horizon_confidence = risk.get("horizon_confidence") or risk.get("confidence") or "media"
+    data_quality_confidence = risk.get("data_quality_confidence")
     factor_bits = []
-    raw_factors = risk.get("risk_factors") or []
+    raw_factors = risk.get("risk_factors")
     if isinstance(raw_factors, dict):
         normalized_factors = []
         for factor_id, factor in raw_factors.items():
@@ -666,22 +948,40 @@ def explain_recommendation(payload: dict) -> dict:
                     "state": factor.get("severity") or factor.get("state"),
                 }
             )
-    else:
+    elif isinstance(raw_factors, list):
         normalized_factors = [factor for factor in raw_factors if isinstance(factor, dict)]
+    else:
+        normalized_factors = []
 
     for factor in normalized_factors:
+        if not isinstance(factor, dict):
+            continue
         label = factor.get("label")
         state = factor.get("state")
         if label and state:
             factor_bits.append(f"{label.lower()} {state}")
     factor_text = ", ".join(factor_bits[:3]) if factor_bits else "senal climatica relevante"
 
+    confidence_text = f"confianza de horizonte {horizon_confidence}"
+    if data_quality_confidence and data_quality_confidence != horizon_confidence:
+        confidence_text += f" y calidad de datos {data_quality_confidence}"
+
     summary = (
-        f"Tu cultivo esta en {phase}. El riesgo preventivo es {level} con confianza {confidence} "
+        f"Tu cultivo esta en {phase}. El riesgo preventivo es {level} con {confidence_text} "
         f"porque se observa {factor_text}."
     )
+    if risk.get("assumptions") or risk.get("input_warnings"):
+        summary += " La evaluacion incluye supuestos o advertencias de datos que deben revisarse."
+    climate_state = risk.get("climate_state") or {}
+    if risk.get("horizon") == "gt_16_days" or climate_state.get("rain") == "escenario estacional":
+        summary += " Esta evaluacion es un escenario estacional, no un pronostico puntual de lluvia en parcela."
     if official.get("canicula_2026_watch"):
         summary += " Ademas, existe vigilancia oficial por canicula o periodos secos en 2026."
+    secondary_alerts = risk.get("secondary_alerts") if isinstance(risk.get("secondary_alerts"), list) else []
+    if secondary_alerts:
+        first_alert = secondary_alerts[0] if isinstance(secondary_alerts[0], dict) else {}
+        alert_text = first_alert.get("message") or "hay una alerta secundaria relevante."
+        summary += f" Alerta secundaria: {alert_text}"
     if recommendations:
         summary += " Acciones sugeridas: " + " ".join(recommendations[:3])
 

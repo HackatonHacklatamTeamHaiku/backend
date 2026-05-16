@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 import unittest
+import sys
+import types
 from unittest.mock import patch
+
+bs4_stub = types.ModuleType("bs4")
+bs4_stub.BeautifulSoup = object
+sys.modules.setdefault("bs4", bs4_stub)
 
 from app import create_app
 
@@ -174,6 +180,61 @@ class ManifestRouteTests(unittest.TestCase):
         body = response.get_json()
         self.assertEqual(body["meta"]["upstream_status"], "invalid_request")
         self.assertIn("arguments", body["error"])
+
+    def test_explain_recommendation_accepts_legacy_risk_payload_shape(self):
+        response = self.app.post(
+            "/api/v1/ai/tools/call",
+            json={
+                "tool_name": "explainRecommendation",
+                "arguments": {
+                    "risk_assessment": {
+                        "crop": "maiz",
+                        "sowing_date": "2026-05-10",
+                        "lat": 13.8,
+                        "lon": -89.1833,
+                        "target_date": "2026-05-16",
+                        "phenology": {
+                            "days_since_sowing": 6,
+                            "phase": "VE",
+                            "phase_name": "germinacion y emergencia",
+                            "susceptibility": "alta",
+                            "confidence": "alta",
+                        },
+                        "risk_factors": {
+                            "water_deficit": {
+                                "score": 0.7,
+                                "severity": "media",
+                                "explanation": "Poca lluvia reciente.",
+                            },
+                            "heat_stress": {
+                                "score": 0.9,
+                                "severity": "alta",
+                                "explanation": "Temperatura alta.",
+                            },
+                        },
+                        "risk_score": 0.76,
+                        "risk_level": "alto",
+                        "recommendations": [
+                            "vigilar humedad del suelo cada 24 horas",
+                            "evitar fertilizar en condiciones secas",
+                        ],
+                        "confidence": "media-alta",
+                    },
+                    "official_context": {
+                        "canicula_2026_watch": True,
+                        "published_at": "2026-04-20",
+                        "snippets": [
+                            "Fuente oficial vigente para 2026 con vigilancia por canicula.",
+                        ],
+                    },
+                    "audience": "productor",
+                },
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["result"]
+        self.assertIn("summary", body)
+        self.assertIn("germinacion y emergencia", body["summary"])
 
     @patch("routes.llm.build_runtime_llm_context")
     def test_llm_context_exposes_runtime_context_keys(self, mocked):

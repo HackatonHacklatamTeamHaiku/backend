@@ -932,14 +932,37 @@ def explain_recommendation(payload: dict) -> dict:
     risk = payload.get("risk_assessment") if isinstance(payload.get("risk_assessment"), dict) else {}
     official = payload.get("official_context") if isinstance(payload.get("official_context"), dict) else {}
     plant = payload.get("plant_state") if isinstance(payload.get("plant_state"), dict) else {}
+    if not plant:
+        plant = risk.get("plant_state") if isinstance(risk.get("plant_state"), dict) else {}
+    if not plant:
+        plant = risk.get("phenology") if isinstance(risk.get("phenology"), dict) else {}
     recommendations = payload.get("recommendations") if isinstance(payload.get("recommendations"), list) else []
+    if not recommendations:
+        recommendations = risk.get("recommendations") if isinstance(risk.get("recommendations"), list) else []
 
-    phase = plant.get("phase") or "fase estimada"
+    phase = plant.get("phase_name") or plant.get("phase") or "fase estimada"
     level = risk.get("risk_level") or "ATENCION"
     horizon_confidence = risk.get("horizon_confidence") or risk.get("confidence") or "media"
     data_quality_confidence = risk.get("data_quality_confidence")
     factor_bits = []
-    for factor in (risk.get("risk_factors") if isinstance(risk.get("risk_factors"), list) else []):
+    raw_factors = risk.get("risk_factors")
+    if isinstance(raw_factors, dict):
+        normalized_factors = []
+        for factor_id, factor in raw_factors.items():
+            if not isinstance(factor, dict):
+                continue
+            normalized_factors.append(
+                {
+                    "label": factor.get("label") or factor_id.replace("_", " "),
+                    "state": factor.get("severity") or factor.get("state"),
+                }
+            )
+    elif isinstance(raw_factors, list):
+        normalized_factors = [factor for factor in raw_factors if isinstance(factor, dict)]
+    else:
+        normalized_factors = []
+
+    for factor in normalized_factors:
         if not isinstance(factor, dict):
             continue
         label = factor.get("label")
@@ -954,7 +977,7 @@ def explain_recommendation(payload: dict) -> dict:
 
     summary = (
         f"Tu cultivo esta en {phase}. El riesgo preventivo es {level} con {confidence_text} "
-        f"porque el backend detecta {factor_text}."
+        f"porque se observa {factor_text}."
     )
     if risk.get("assumptions") or risk.get("input_warnings"):
         summary += " La evaluacion incluye supuestos o advertencias de datos que deben revisarse."

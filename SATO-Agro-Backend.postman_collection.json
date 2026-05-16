@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "SATO-Agro Backend",
-    "description": "Trimmed API collection for the SATO-Agro backend.\n\nPrimary routes live under /api/weather, /api/geo, /api/risk, and /api/llm.\nCompatibility routes are kept only for /api/v1/documents/latest and /api/v1/ai/tools/*.\n\nBase URL: http://127.0.0.1:5000\n\nTest coordinates: San Salvador (lat=13.69, lon=-89.21)",
+    "description": "Trimmed API collection for the SATO-Agro backend.\n\nPrimary routes live under /api/weather, /api/geo, /api/risk, and /api/llm.\nCompatibility routes are kept only for /api/v1/documents/latest and the 4 semantic AI tools announced by the backend manifest.\n\nBase URL: http://127.0.0.1:5000\n\nTest coordinates: San Salvador (lat=13.69, lon=-89.21)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -248,7 +248,7 @@
                 }
               ]
             },
-            "description": "Runtime context bundle for LLM assistants: observed weather, forecast, geo, phenology, official context — all in one payload."
+            "description": "Runtime context bundle for LLM assistants: observed weather, forecast, plant state, official context, risk assessment, and source policy."
           }
         },
         {
@@ -299,7 +299,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"risk_assessment\": {\n    \"crop\": \"maiz\",\n    \"risk_level\": \"alto\",\n    \"risk_score\": 0.82,\n    \"phenology\": {\n      \"phase\": \"Llenado de grano\",\n      \"susceptibility\": \"alta\",\n      \"days_after_sowing\": 87\n    },\n    \"climate_state\": {\n      \"canicula_watch\": true,\n      \"rain_sum_mm\": 0.0,\n      \"temp_max_c\": 32.0,\n      \"seasonal\": \"vigilancia_canicula\"\n    },\n    \"recommendations\": [\n      \"Aplicar mulch para conservar humedad\",\n      \"Monitorear signos de estres hidrico\"\n    ]\n  }\n}"
+              "raw": "{\n  \"risk_assessment\": {\n    \"risk_level\": \"alto\",\n    \"risk_score\": 0.82,\n    \"confidence\": \"media_alta\",\n    \"risk_factors\": [\n      {\n        \"label\": \"Deficit hidrico\",\n        \"state\": \"severo\"\n      }\n    ]\n  },\n  \"plant_state\": {\n    \"phase\": \"Llenado de grano\"\n  },\n  \"official_context\": {\n    \"canicula_2026_watch\": true\n  },\n  \"recommendations\": [\n    \"Aplicar mulch para conservar humedad\",\n    \"Monitorear signos de estres hidrico\"\n  ],\n  \"audience\": \"productor\"\n}"
             },
             "description": "Backend-generated plain-language explanation from a structured risk assessment. Requires risk_assessment object in body."
           }
@@ -308,7 +308,7 @@
     },
     {
       "name": "Compatibility",
-      "description": "Kept only for document discovery and tool-based assistant integrations.",
+      "description": "Kept only for document discovery and the 4 semantic AI tool integrations announced by the backend manifest.",
       "item": [
         {
           "name": "V1 Latest Documents",
@@ -346,217 +346,7 @@
                 "manifest"
               ]
             },
-            "description": "Returns the function-calling manifest with 10 tools, their schemas, and descriptions. Compatible with OpenAI/Gemini function calling."
-          }
-        },
-        {
-          "name": "Tool: get_stations",
-          "request": {
-            "method": "POST",
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/ai/tools/call",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "ai",
-                "tools",
-                "call"
-              ]
-            },
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"tool_name\": \"get_stations\",\n  \"arguments\": {}\n}"
-            },
-            "description": "Returns all weather stations. Optional filters: station_id (integer) or station_name (string, case-insensitive search)."
-          }
-        },
-        {
-          "name": "Tool: get_stations (by name)",
-          "request": {
-            "method": "POST",
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/ai/tools/call",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "ai",
-                "tools",
-                "call"
-              ]
-            },
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"tool_name\": \"get_stations\",\n  \"arguments\": {\n    \"station_name\": \"Ilopango\"\n  }\n}"
-            },
-            "description": "Search stations by name (case-insensitive partial match)."
-          }
-        },
-        {
-          "name": "Tool: get_current_features (nearest)",
-          "request": {
-            "method": "POST",
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/ai/tools/call",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "ai",
-                "tools",
-                "call"
-              ]
-            },
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"tool_name\": \"get_current_features\",\n  \"arguments\": {\n    \"lat\": 13.69,\n    \"lon\": -89.21\n  }\n}"
-            },
-            "description": "Get flattened observation features for the nearest station to a location."
-          }
-        },
-        {
-          "name": "Tool: get_latest_documents",
-          "request": {
-            "method": "POST",
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/ai/tools/call",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "ai",
-                "tools",
-                "call"
-              ]
-            },
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"tool_name\": \"get_latest_documents\",\n  \"arguments\": {}\n}"
-            },
-            "description": "Get all latest forecast and bulletin documents. Optional filter: document_type (forecast_48h, weekly_forecast_pdf, agro_bulletin_pdf)."
-          }
-        },
-        {
-          "name": "Tool: get_latest_documents (filtered)",
-          "request": {
-            "method": "POST",
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/ai/tools/call",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "ai",
-                "tools",
-                "call"
-              ]
-            },
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"tool_name\": \"get_latest_documents\",\n  \"arguments\": {\n    \"document_type\": \"forecast_48h\"\n  }\n}"
-            },
-            "description": "Get only the 48h forecast document."
-          }
-        },
-        {
-          "name": "Tool: get_location_context",
-          "request": {
-            "method": "POST",
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/ai/tools/call",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "ai",
-                "tools",
-                "call"
-              ]
-            },
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"tool_name\": \"get_location_context\",\n  \"arguments\": {\n    \"lat\": 13.69,\n    \"lon\": -89.21\n  }\n}"
-            },
-            "description": "Full location bundle: nearest station, features, and documents for a point. Requires lat and lon."
-          }
-        },
-        {
-          "name": "Tool: get_agro_advisory",
-          "request": {
-            "method": "POST",
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/ai/tools/call",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "ai",
-                "tools",
-                "call"
-              ]
-            },
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"tool_name\": \"get_agro_advisory\",\n  \"arguments\": {\n    \"crop\": \"maiz\",\n    \"sowing_date\": \"2026-05-20\",\n    \"lat\": 13.69,\n    \"lon\": -89.21,\n    \"target_date\": \"2026-08-15\"\n  }\n}"
-            },
-            "description": "Crop risk advisory with auto-derivation. Required: crop, sowing_date, lat, lon. Optional: target_date, rain_sum_mm, et0_sum_mm, days_window, dry_days, temp_max_c, wind_max_kmh, soil, seasonal, canicula_watch."
+            "description": "Returns the function-calling manifest with the 4 semantic tools currently announced by the backend."
           }
         },
         {
@@ -680,36 +470,6 @@
           }
         },
         {
-          "name": "Tool: buildRuntimeContext",
-          "request": {
-            "method": "POST",
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/ai/tools/call",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "ai",
-                "tools",
-                "call"
-              ]
-            },
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"tool_name\": \"buildRuntimeContext\",\n  \"arguments\": {\n    \"crop\": \"maiz\",\n    \"sowing_date\": \"2026-05-20\",\n    \"lat\": 13.69,\n    \"lon\": -89.21,\n    \"target_date\": \"2026-08-15\"\n  }\n}"
-            },
-            "description": "Complete runtime context for LLM generation: observed weather, forecast, geo context, phenology, official context — all assembled."
-          }
-        },
-        {
           "name": "Tool: explainRecommendation",
           "request": {
             "method": "POST",
@@ -734,7 +494,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tool_name\": \"explainRecommendation\",\n  \"arguments\": {\n    \"risk_assessment\": {\n      \"crop\": \"maiz\",\n      \"risk_level\": \"alto\",\n      \"risk_score\": 0.82,\n      \"phenology\": {\n        \"phase\": \"Llenado de grano\",\n        \"susceptibility\": \"alta\"\n      },\n      \"climate_state\": {\n        \"canicula_watch\": true,\n        \"rain_sum_mm\": 0.0,\n        \"temp_max_c\": 32.0\n      },\n      \"recommendations\": [\n        \"Aplicar mulch para conservar humedad\",\n        \"Monitorear signos de estres hidrico\"\n      ]\n    },\n    \"audience\": \"productor\"\n  }\n}"
+              "raw": "{\n  \"tool_name\": \"explainRecommendation\",\n  \"arguments\": {\n    \"risk_assessment\": {\n      \"risk_level\": \"alto\",\n      \"risk_score\": 0.82\n    },\n    \"official_context\": {\n      \"canicula_2026_watch\": true\n    },\n    \"audience\": \"productor\"\n  }\n}"
             },
             "description": "Turn a risk assessment into a simple explanation for the producer or extension team. Required: risk_assessment. Optional: official_context, plant_state, recommendations, audience."
           }

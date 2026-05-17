@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify
 
-from services.database import check_connection
+from services.supabase_rest import rest_available
 from utils.time import now_utc_iso
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ bp = Blueprint("health", __name__)
 @bp.route("/health")
 def health():
     """Simple health check — always returns 200 if Flask is running."""
-    db_ok = check_connection()
+    db_ok = rest_available()
     return jsonify({
         "status": "ok",
         "service": "sato-agro-backend",

@@ -8,8 +8,8 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from services.alert_messages import build_whatsapp_risk_alert, should_send_risk_alert
-from services.database import get_dict_cursor
 from services.manifest_context import get_risk_assessment
+from services.supabase_rest import rest_select
 from services.zavu_notifications import ZavuNotificationClient
 
 
@@ -55,32 +55,62 @@ def _idempotency_key(user_crop_id: str, target_date: date) -> str:
 
 
 def _fetch_active_user_crops(limit: int) -> list[dict]:
-    with get_dict_cursor() as cur:
-        cur.execute(
-            """
-            select
-                uc.id::text as user_crop_id,
-                uc.profile_id::text as profile_id,
-                uc.sowing_date,
-                uc.lat,
-                uc.lon,
-                ct.code::text as crop_code,
-                p.whatsapp_phone,
-                coalesce(up.alert_whatsapp_enabled, true) as alert_whatsapp_enabled
-            from user_crops uc
-            join profiles p on p.id = uc.profile_id
-            join crop_types ct on ct.id = uc.crop_type_id
-            left join user_preferences up on up.profile_id = uc.profile_id
-            where uc.status = 'active'
-              and p.whatsapp_phone is not null
-              and p.whatsapp_phone <> ''
-              and coalesce(up.alert_whatsapp_enabled, true) = true
-            order by uc.created_at asc
-            limit %s
-            """,
-            (limit,),
+    rows = rest_select(
+        "user_crops",
+        {
+            "select": "id,profile_id,sowing_date,lat,lon,crop_type_id,created_at",
+            "status": "eq.active",
+            "order": "created_at.asc",
+            "limit": str(limit),
+        },
+    )
+    active_rows = []
+    for row in rows:
+        profile = _first(
+            rest_select(
+                "profiles",
+                {"select": "whatsapp_phone", "id": f"eq.{row['profile_id']}", "limit": "1"},
+            )
         )
-        return list(cur.fetchall())
+        whatsapp_phone = (profile or {}).get("whatsapp_phone")
+        if not whatsapp_phone:
+            continue
+
+        preferences = _first(
+            rest_select(
+                "user_preferences",
+                {"select": "alert_whatsapp_enabled", "profile_id": f"eq.{row['profile_id']}", "limit": "1"},
+            )
+        )
+        if preferences and preferences.get("alert_whatsapp_enabled") is False:
+            continue
+
+        crop_type = _first(
+            rest_select(
+                "crop_types",
+                {"select": "code", "id": f"eq.{row['crop_type_id']}", "limit": "1"},
+            )
+        )
+        if not crop_type:
+            continue
+
+        active_rows.append(
+            {
+                "user_crop_id": str(row["id"]),
+                "profile_id": str(row["profile_id"]),
+                "sowing_date": row["sowing_date"],
+                "lat": row["lat"],
+                "lon": row["lon"],
+                "crop_code": crop_type["code"],
+                "whatsapp_phone": whatsapp_phone,
+                "alert_whatsapp_enabled": True,
+            }
+        )
+    return active_rows
+
+
+def _first(rows: list[dict]) -> dict | None:
+    return rows[0] if rows else None
 
 
 def _new_summary(target_date: date, dry_run: bool, limit: int) -> dict:
@@ -135,7 +165,7 @@ def run_daily_risk_alerts(
             assessment, _meta, status = get_risk_assessment(
                 {
                     "crop": crop,
-                    "sowing_date": row["sowing_date"].isoformat(),
+                    "sowing_date": _as_date_string(row["sowing_date"]),
                     "lat": _as_float(row["lat"]),
                     "lon": _as_float(row["lon"]),
                     "target_date": parsed_target_date.isoformat(),
@@ -234,3 +264,7 @@ def run_daily_risk_alerts(
             )
 
     return summary
+
+
+def _as_date_string(value: Any) -> str:
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)

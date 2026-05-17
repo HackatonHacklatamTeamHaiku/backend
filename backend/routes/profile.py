@@ -5,7 +5,7 @@ import re
 from flask import Blueprint, g, jsonify, request
 
 from routes.request_validation import invalid_request
-from services.database import get_dict_cursor
+from services.supabase_rest import rest_update
 from utils.time import now_utc_iso
 
 bp = Blueprint("profile", __name__, url_prefix="/api/profile")
@@ -29,24 +29,19 @@ def update_profile():
     except ValueError as exc:
         return invalid_request(str(exc))
 
-    with get_dict_cursor() as cur:
-        cur.execute(
-            """
-            UPDATE profiles
-            SET whatsapp_phone = %s
-            WHERE id = %s
-            RETURNING *
-            """,
-            (whatsapp_phone, profile_id),
-        )
-        profile = cur.fetchone()
+    profiles = rest_update(
+        "profiles",
+        {"id": profile_id},
+        {"whatsapp_phone": whatsapp_phone},
+    )
+    profile = profiles[0] if profiles else None
 
     if not profile:
         return invalid_request("Profile was not found")
 
     return jsonify(
         {
-            "data": dict(profile),
+                "data": profile,
             "meta": {
                 "cached": False,
                 "stale": False,

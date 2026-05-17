@@ -10,7 +10,6 @@ Or:
 
 from __future__ import annotations
 
-import atexit
 import logging
 import sys
 
@@ -19,6 +18,8 @@ from flask_cors import CORS
 
 from config import Config
 from services.auth import require_api_auth
+from services.supabase_rest import SupabaseRestError
+from utils.time import now_utc_iso
 
 
 def create_app() -> Flask:
@@ -30,15 +31,17 @@ def create_app() -> Flask:
     CORS(app)
     app.before_request(require_api_auth)
 
-    # ── Database (Supabase PostgreSQL) ────────────────────────
-    from services.database import init_pool, close_pool
-    if app.config.get("DATABASE_URL"):
-        try:
-            init_pool(app.config["DATABASE_URL"])
-        except Exception:
-            app.logger.warning("Database pool init failed — DB features disabled")
-        else:
-            atexit.register(close_pool)
+    @app.errorhandler(SupabaseRestError)
+    def handle_supabase_rest_error(error: SupabaseRestError):
+        return {
+            "data": {"error": str(error), "details": error.payload},
+            "meta": {
+                "cached": False,
+                "stale": False,
+                "upstream_status": "configuration_error" if error.status_code is None else "upstream_error",
+                "fetched_at": now_utc_iso(),
+            },
+        }, 503
 
     # ── Logging ──────────────────────────────────────────────
     logging.basicConfig(

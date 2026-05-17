@@ -112,9 +112,16 @@ Server starts at **http://127.0.0.1:5000**
 
 ### Supabase
 
-The backend reads `DATABASE_URL` from [backend/.env](/C:/Users/brite/OneDrive/Documents/SATOAGRO/backend/backend/.env). For Supabase on an IPv4 network, use the Session Pooler connection string.
+The runtime backend uses Supabase REST/PostgREST, not a direct PostgreSQL connection. Configure these values in `backend/.env`:
 
-Apply the schema to the cloud database:
+```env
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
+```
+
+Keep the service role key server-side only. It must not be exposed to frontend clients.
+
+Apply the schema to the cloud database through the Supabase SQL Editor or CLI. The legacy direct-SQL migration script still expects `DATABASE_URL`:
 
 ```bash
 python backend/scripts/apply_migrations.py

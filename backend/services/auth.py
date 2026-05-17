@@ -12,7 +12,7 @@ from flask import current_app, g, jsonify, request
 from jwt import InvalidTokenError
 
 from config import Config
-from services.database import get_dict_cursor
+from services.supabase_rest import rest_insert, rest_select, rest_upsert
 from utils.time import now_utc_iso
 
 logger = logging.getLogger(__name__)
@@ -116,52 +116,31 @@ def verify_supabase_access_token(token: str) -> dict:
 
 def ensure_profile_for_claims(claims: dict) -> dict | None:
     try:
-        with get_dict_cursor() as cur:
-            cur.execute("SELECT * FROM profiles WHERE id = %s", (claims["sub"],))
-            existing = cur.fetchone()
-            if existing:
-                return dict(existing)
+        existing = rest_select("profiles", {"select": "*", "id": f"eq.{claims['sub']}", "limit": "1"})
+        if existing:
+            return existing[0]
 
-            user_meta = claims.get("user_metadata") or {}
-            full_name = user_meta.get("full_name") or user_meta.get("name")
-            display_name = user_meta.get("display_name") or user_meta.get("name")
-            phone = claims.get("phone") or user_meta.get("phone")
+        user_meta = claims.get("user_metadata") or {}
+        full_name = user_meta.get("full_name") or user_meta.get("name")
+        display_name = user_meta.get("display_name") or user_meta.get("name")
+        phone = claims.get("phone") or user_meta.get("phone")
 
-            cur.execute(
-                """
-                INSERT INTO profiles (
-                    id,
-                    full_name,
-                    display_name,
-                    phone,
-                    whatsapp_phone,
-                    role,
-                    preferred_language,
-                    country,
-                    onboarding_completed
-                )
-                VALUES (%s, %s, %s, %s, %s, 'producer', 'es', 'El Salvador', false)
-                ON CONFLICT (id) DO NOTHING
-                """,
-                (
-                    claims["sub"],
-                    full_name,
-                    display_name,
-                    phone,
-                    phone,
-                ),
-            )
-            cur.execute(
-                """
-                INSERT INTO user_preferences (profile_id)
-                VALUES (%s)
-                ON CONFLICT (profile_id) DO NOTHING
-                """,
-                (claims["sub"],),
-            )
-            cur.execute("SELECT * FROM profiles WHERE id = %s", (claims["sub"],))
-            created = cur.fetchone()
-            return dict(created) if created else None
+        created = rest_insert(
+            "profiles",
+            {
+                "id": claims["sub"],
+                "full_name": full_name,
+                "display_name": display_name,
+                "phone": phone,
+                "whatsapp_phone": phone,
+                "role": "producer",
+                "preferred_language": "es",
+                "country": "El Salvador",
+                "onboarding_completed": False,
+            },
+        )
+        rest_upsert("user_preferences", {"profile_id": claims["sub"]}, on_conflict="profile_id")
+        return created[0] if created else None
     except RuntimeError:
         return None
     except Exception:
@@ -218,15 +197,16 @@ def _testing_user() -> dict:
         "role": "authenticated",
         "user_metadata": {"full_name": "Testing User", "display_name": "Testing User"},
     }
+    profile = ensure_profile_for_claims(claims) or {
+        "id": claims["sub"],
+        "full_name": "Testing User",
+        "display_name": "Testing User",
+        "role": "producer",
+    }
     return {
         "user_id": claims["sub"],
         "email": claims["email"],
         "role": claims["role"],
         "claims": claims,
-        "profile": {
-            "id": claims["sub"],
-            "full_name": "Testing User",
-            "display_name": "Testing User",
-            "role": "producer",
-        },
+        "profile": profile,
     }

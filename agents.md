@@ -362,12 +362,11 @@ Supabase is already mounted into the project.
 
 Current setup:
 
-- `backend/.env` holds `DATABASE_URL`
+- `backend/.env` holds `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
 - `backend/config.py` loads env vars
-- `backend/services/database.py` manages the connection pool
+- runtime persistence uses Supabase REST/PostgREST through `backend/services/supabase_rest.py`
 - `backend/migrations/001_initial_schema.sql` creates the schema
-- `backend/scripts/apply_migrations.py` applies migrations
-- `backend/scripts/verify_database.py` verifies the mounted schema
+- legacy direct-SQL scripts remain available for migrations and verification when `DATABASE_URL` is configured
 
 Current public schema covers:
 
@@ -394,8 +393,8 @@ Rules:
 Recommended workflow:
 
 1. edit or add SQL migration
-2. run `python backend/scripts/apply_migrations.py`
-3. run `python backend/scripts/verify_database.py`
+2. apply it through the Supabase SQL Editor or CLI
+3. verify schema through Supabase or the legacy `python backend/scripts/verify_database.py` when `DATABASE_URL` is configured
 4. run backend tests
 
 ---

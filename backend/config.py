@@ -78,9 +78,9 @@ class Config:
     CACHE_TTL_WEEKLY_PDF = int(os.getenv("CACHE_TTL_WEEKLY_PDF", "21600"))          # 6 hours
     CACHE_TTL_AGRO_PDF = int(os.getenv("CACHE_TTL_AGRO_PDF", "21600"))             # 6 hours
 
-    # ── Database (Supabase PostgreSQL) ────────────────────────
-    DATABASE_URL = os.getenv("DATABASE_URL", "")
+    # ── Supabase REST ─────────────────────────────────────────
     SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+    SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY", "")
 
     # ── Zavu notifications ────────────────────────────────────
     ZAVUDEV_API_KEY = os.getenv("ZAVUDEV_API_KEY", "")

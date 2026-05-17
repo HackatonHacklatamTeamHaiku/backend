@@ -104,13 +104,14 @@ class ManifestRouteTests(unittest.TestCase):
     @patch("routes.onboarding.save_onboarding_parcel")
     def test_onboarding_parcel_persists_authenticated_plot(self, mocked):
         mocked.return_value = {
-            "farm_id": "farm-1",
-            "farm_name": "Finca principal",
-            "plot_id": "plot-1",
-            "plot_name": "Parcela principal",
+            "user_crop_id": "crop-1",
+            "crop_cycle_id": "crop-1",
+            "farm_id": None,
+            "farm_name": None,
+            "plot_id": None,
+            "plot_name": None,
             "lat": 13.69,
             "lon": -89.21,
-            "crop_cycle_id": "cycle-1",
             "crop": "maiz",
             "sowing_date": "2026-05-12",
             "status": "active",
@@ -126,7 +127,7 @@ class ManifestRouteTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         body = response.get_json()["data"]
-        self.assertEqual(body["plot_id"], "plot-1")
+        self.assertEqual(body["user_crop_id"], "crop-1")
         self.assertEqual(body["crop"], "maiz")
         mocked.assert_called_once()
 
@@ -149,6 +150,7 @@ class ManifestRouteTests(unittest.TestCase):
         mocked.return_value = [
             {
                 "crop_cycle_id": "cycle-1",
+                "user_crop_id": "cycle-1",
                 "crop_name": "Maiz de mayo",
                 "crop": "maiz",
                 "sowing_date": "2026-05-12",
@@ -167,6 +169,7 @@ class ManifestRouteTests(unittest.TestCase):
     def test_crops_create_persists_user_cycle(self, mocked):
         mocked.return_value = {
             "crop_cycle_id": "cycle-2",
+            "user_crop_id": "cycle-2",
             "crop_name": "Frijol norte",
             "crop": "frijol",
             "sowing_date": "2026-05-20",
@@ -193,6 +196,7 @@ class ManifestRouteTests(unittest.TestCase):
     def test_crops_rename_updates_user_cycle_name(self, mocked):
         mocked.return_value = {
             "crop_cycle_id": "cycle-1",
+            "user_crop_id": "cycle-1",
             "crop_name": "Maiz renombrado",
             "crop": "maiz",
             "sowing_date": "2026-05-12",
@@ -208,7 +212,7 @@ class ManifestRouteTests(unittest.TestCase):
 
     @patch("routes.crops.archive_crop_cycle")
     def test_crops_delete_archives_user_cycle(self, mocked):
-        mocked.return_value = {"crop_cycle_id": "cycle-1", "status": "archived"}
+        mocked.return_value = {"user_crop_id": "cycle-1", "crop_cycle_id": "cycle-1", "status": "archived"}
         response = self.app.delete("/api/crops/cycle-1")
         self.assertEqual(response.status_code, 200)
         body = response.get_json()["data"]
@@ -219,10 +223,11 @@ class ManifestRouteTests(unittest.TestCase):
     def test_plants_create_persists_plant_on_primary_parcel(self, mocked):
         mocked.return_value = {
             "crop_cycle_id": "cycle-plant-1",
+            "user_crop_id": "cycle-plant-1",
             "plant_name": "Milpa norte",
             "crop_name": "Milpa norte",
-            "plot_id": "plot-1",
-            "plot_name": "Parcela principal",
+            "plot_id": None,
+            "plot_name": None,
             "crop": "maiz",
             "sowing_date": "2026-05-20",
             "lat": 13.69,
@@ -242,13 +247,14 @@ class ManifestRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.get_json()["data"]
         self.assertEqual(body["plant_name"], "Milpa norte")
-        self.assertEqual(body["plot_id"], "plot-1")
+        self.assertEqual(body["user_crop_id"], "cycle-plant-1")
         mocked.assert_called_once()
 
     @patch("routes.plants.rename_plant_cycle")
     def test_plants_rename_updates_plant_name(self, mocked):
         mocked.return_value = {
             "crop_cycle_id": "cycle-plant-1",
+            "user_crop_id": "cycle-plant-1",
             "plant_name": "Milpa sur",
             "crop_name": "Milpa sur",
             "crop": "maiz",

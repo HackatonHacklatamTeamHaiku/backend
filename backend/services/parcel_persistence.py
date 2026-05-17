@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from services.supabase_rest import rest_insert, rest_select, rest_update, rest_upsert
+from services.supabase_rest import SupabaseRestError, rest_insert, rest_select, rest_update, rest_upsert
 
 
 CROP_CODE_TO_ID = {
@@ -19,32 +19,34 @@ CROP_ID_TO_UI_CODE = {
     2: "frijol",
 }
 
+USER_CROP_SELECT = "id,profile_id,crop_type_id,display_name,sowing_date,lat,lon,status,created_at,updated_at"
+
 
 def get_active_parcel_context(profile_id: str) -> dict[str, Any] | None:
     rows = rest_select(
-        "crop_cycles",
+        "user_crops",
         {
-            "select": "id,plot_id,crop_type_id,season_label,sowing_date,status,created_at,updated_at",
-            "owner_profile_id": f"eq.{profile_id}",
+            "select": USER_CROP_SELECT,
+            "profile_id": f"eq.{profile_id}",
             "status": "eq.active",
             "order": "updated_at.desc,created_at.desc",
             "limit": "1",
         },
     )
-    return _serialize_cycle(rows[0]) if rows else None
+    return _serialize_user_crop(rows[0]) if rows else None
 
 
 def list_crop_cycles(profile_id: str) -> list[dict[str, Any]]:
     rows = rest_select(
-        "crop_cycles",
+        "user_crops",
         {
-            "select": "id,plot_id,crop_type_id,season_label,sowing_date,status,created_at,updated_at",
-            "owner_profile_id": f"eq.{profile_id}",
+            "select": USER_CROP_SELECT,
+            "profile_id": f"eq.{profile_id}",
             "status": "neq.archived",
             "order": "updated_at.desc,created_at.desc",
         },
     )
-    return [_serialize_cycle(row) for row in rows]
+    return [_serialize_user_crop(row) for row in rows]
 
 
 def create_plant_cycle(
@@ -57,50 +59,36 @@ def create_plant_cycle(
     plant_name: str | None = None,
     farm_name: str = "Finca principal",
 ) -> dict[str, Any]:
-    crop_type_id = CROP_CODE_TO_ID[crop]
-    safe_plant_name = plant_name or _default_crop_name(crop, sowing_date)
-
-    rest_update(
-        "profiles",
-        {"id": profile_id},
-        {"default_lat": lat, "default_lon": lon, "onboarding_completed": True},
-        return_representation=False,
+    del farm_name
+    return _create_or_reuse_user_crop(
+        profile_id=profile_id,
+        crop=crop,
+        sowing_date=sowing_date,
+        lat=lat,
+        lon=lon,
+        display_name=plant_name,
     )
-    farm_id = _get_or_create_farm(profile_id=profile_id, farm_name=farm_name, lat=lat, lon=lon)
-    plot_id = _get_or_create_primary_plot(farm_id=farm_id, lat=lat, lon=lon)
-    created = rest_insert(
-        "crop_cycles",
-        {
-            "plot_id": plot_id,
-            "owner_profile_id": profile_id,
-            "crop_type_id": crop_type_id,
-            "season_label": safe_plant_name,
-            "sowing_date": sowing_date,
-            "status": "active",
-        },
-    )
-    _upsert_crop_interest(profile_id=profile_id, crop_type_id=crop_type_id)
-    return _serialize_cycle(created[0])
 
 
 def rename_plant_cycle(*, profile_id: str, crop_cycle_id: str, plant_name: str) -> dict[str, Any] | None:
     updated = rest_update(
-        "crop_cycles",
-        {"id": crop_cycle_id, "owner_profile_id": profile_id, "status": "neq.archived"},
-        {"season_label": plant_name},
+        "user_crops",
+        {"id": crop_cycle_id, "profile_id": profile_id, "status": "neq.archived"},
+        {"display_name": plant_name},
     )
-    return _serialize_cycle(updated[0]) if updated else None
+    return _serialize_user_crop(updated[0]) if updated else None
 
 
 def archive_plant_cycle(*, profile_id: str, crop_cycle_id: str) -> dict[str, Any] | None:
     updated = rest_update(
-        "crop_cycles",
-        {"id": crop_cycle_id, "owner_profile_id": profile_id, "status": "neq.archived"},
+        "user_crops",
+        {"id": crop_cycle_id, "profile_id": profile_id, "status": "neq.archived"},
         {"status": "archived"},
     )
     if not updated:
         return None
-    return {"crop_cycle_id": _json_value(updated[0]["id"]), "status": "archived"}
+    archived_id = _json_value(updated[0]["id"])
+    return {"user_crop_id": archived_id, "crop_cycle_id": archived_id, "status": "archived"}
 
 
 def create_crop_cycle(
@@ -139,6 +127,25 @@ def save_onboarding_parcel(
     farm_name: str = "Finca principal",
     plot_name: str = "Parcela principal",
 ) -> dict[str, Any]:
+    del farm_name, plot_name
+    return _create_or_reuse_user_crop(
+        profile_id=profile_id,
+        crop=crop,
+        sowing_date=sowing_date,
+        lat=lat,
+        lon=lon,
+    )
+
+
+def _create_or_reuse_user_crop(
+    *,
+    profile_id: str,
+    crop: str,
+    sowing_date: date,
+    lat: float,
+    lon: float,
+    display_name: str | None = None,
+) -> dict[str, Any]:
     crop_type_id = CROP_CODE_TO_ID[crop]
 
     rest_update(
@@ -147,136 +154,78 @@ def save_onboarding_parcel(
         {"default_lat": lat, "default_lon": lon, "onboarding_completed": True},
         return_representation=False,
     )
-    farm_id = _get_or_create_farm(profile_id=profile_id, farm_name=farm_name, lat=lat, lon=lon)
-    plot_id = _get_or_create_plot(farm_id=farm_id, plot_name=plot_name, lat=lat, lon=lon)
-    crop_cycle_id = _get_or_create_crop_cycle(
+    existing = _find_active_user_crop(
         profile_id=profile_id,
-        plot_id=plot_id,
         crop_type_id=crop_type_id,
         sowing_date=sowing_date,
+        lat=lat,
+        lon=lon,
     )
+    if existing:
+        if display_name and display_name != existing.get("display_name"):
+            updated = rest_update(
+                "user_crops",
+                {"id": existing["id"], "profile_id": profile_id, "status": "eq.active"},
+                {"display_name": display_name},
+            )
+            existing = updated[0] if updated else existing
+        _upsert_crop_interest(profile_id=profile_id, crop_type_id=crop_type_id)
+        return _serialize_user_crop(existing)
+
+    try:
+        created = rest_insert(
+            "user_crops",
+            {
+                "profile_id": profile_id,
+                "crop_type_id": crop_type_id,
+                "sowing_date": sowing_date,
+                "lat": lat,
+                "lon": lon,
+                "display_name": display_name,
+                "status": "active",
+            },
+        )
+    except SupabaseRestError as exc:
+        if exc.status_code != 409:
+            raise
+        existing = _find_active_user_crop(
+            profile_id=profile_id,
+            crop_type_id=crop_type_id,
+            sowing_date=sowing_date,
+            lat=lat,
+            lon=lon,
+        )
+        if not existing:
+            raise
+        created = [existing]
+
     _upsert_crop_interest(profile_id=profile_id, crop_type_id=crop_type_id)
-    return _get_crop_cycle_by_id(profile_id=profile_id, crop_cycle_id=crop_cycle_id)
+    return _serialize_user_crop(created[0])
 
 
-def _get_or_create_farm(*, profile_id: str, farm_name: str, lat: float, lon: float) -> str:
+def _find_active_user_crop(
+    *,
+    profile_id: str,
+    crop_type_id: int,
+    sowing_date: date,
+    lat: float,
+    lon: float,
+) -> dict[str, Any] | None:
     rows = rest_select(
-        "farms",
+        "user_crops",
         {
-            "select": "id",
-            "owner_profile_id": f"eq.{profile_id}",
-            "order": "created_at.asc",
-            "limit": "1",
-        },
-    )
-    if rows:
-        farm_id = str(rows[0]["id"])
-        rest_update(
-            "farms",
-            {"id": farm_id},
-            {"farm_name": farm_name, "centroid_lat": lat, "centroid_lon": lon},
-            return_representation=False,
-        )
-        return farm_id
-
-    created = rest_insert(
-        "farms",
-        {"owner_profile_id": profile_id, "farm_name": farm_name, "centroid_lat": lat, "centroid_lon": lon},
-    )
-    return str(created[0]["id"])
-
-
-def _get_or_create_plot(*, farm_id: str, plot_name: str, lat: float, lon: float) -> str:
-    rows = rest_select(
-        "plots",
-        {"select": "id", "farm_id": f"eq.{farm_id}", "order": "created_at.asc", "limit": "1"},
-    )
-    if rows:
-        plot_id = str(rows[0]["id"])
-        rest_update(
-            "plots",
-            {"id": plot_id},
-            {"plot_name": plot_name, "centroid_lat": lat, "centroid_lon": lon},
-            return_representation=False,
-        )
-        return plot_id
-
-    created = rest_insert(
-        "plots",
-        {"farm_id": farm_id, "plot_name": plot_name, "centroid_lat": lat, "centroid_lon": lon},
-    )
-    return str(created[0]["id"])
-
-
-def _get_or_create_primary_plot(*, farm_id: str, lat: float, lon: float) -> str:
-    rows = rest_select(
-        "plots",
-        {"select": "id", "farm_id": f"eq.{farm_id}", "order": "created_at.asc", "limit": "1"},
-    )
-    if rows:
-        plot_id = str(rows[0]["id"])
-        rest_update(
-            "plots",
-            {"id": plot_id},
-            {"centroid_lat": lat, "centroid_lon": lon},
-            return_representation=False,
-        )
-        return plot_id
-
-    created = rest_insert(
-        "plots",
-        {"farm_id": farm_id, "plot_name": "Parcela principal", "centroid_lat": lat, "centroid_lon": lon},
-    )
-    return str(created[0]["id"])
-
-
-def _get_or_create_crop_cycle(*, profile_id: str, plot_id: str, crop_type_id: int, sowing_date: date) -> str:
-    rows = rest_select(
-        "crop_cycles",
-        {
-            "select": "id",
-            "owner_profile_id": f"eq.{profile_id}",
-            "plot_id": f"eq.{plot_id}",
+            "select": USER_CROP_SELECT,
+            "profile_id": f"eq.{profile_id}",
             "crop_type_id": f"eq.{crop_type_id}",
             "sowing_date": f"eq.{sowing_date.isoformat()}",
+            "lat": f"eq.{_coordinate_filter_value(lat)}",
+            "lon": f"eq.{_coordinate_filter_value(lon)}",
             "status": "eq.active",
             "order": "updated_at.desc,created_at.desc",
             "limit": "1",
         },
     )
-    if rows:
-        return str(rows[0]["id"])
-
-    rest_update(
-        "crop_cycles",
-        {"owner_profile_id": profile_id, "plot_id": plot_id, "status": "eq.active"},
-        {"status": "archived"},
-        return_representation=False,
-    )
-    created = rest_insert(
-        "crop_cycles",
-        {
-            "plot_id": plot_id,
-            "owner_profile_id": profile_id,
-            "crop_type_id": crop_type_id,
-            "sowing_date": sowing_date,
-            "status": "active",
-        },
-    )
-    return str(created[0]["id"])
-
-
-def _get_crop_cycle_by_id(*, profile_id: str, crop_cycle_id: str) -> dict[str, Any] | None:
-    rows = rest_select(
-        "crop_cycles",
-        {
-            "select": "id,plot_id,crop_type_id,season_label,sowing_date,status",
-            "id": f"eq.{crop_cycle_id}",
-            "owner_profile_id": f"eq.{profile_id}",
-            "limit": "1",
-        },
-    )
-    return _serialize_cycle(rows[0]) if rows else None
+    return rows[0] if rows else None
 
 
 def _upsert_crop_interest(*, profile_id: str, crop_type_id: int) -> None:
@@ -288,47 +237,35 @@ def _upsert_crop_interest(*, profile_id: str, crop_type_id: int) -> None:
     )
 
 
-def _serialize_cycle(cycle: dict[str, Any]) -> dict[str, Any]:
-    plot = _get_plot(cycle.get("plot_id"))
-    farm = _get_farm(plot.get("farm_id") if plot else None)
-    crop = CROP_ID_TO_UI_CODE.get(int(cycle["crop_type_id"]), "maiz")
-    sowing_date = cycle["sowing_date"]
+def _serialize_user_crop(user_crop: dict[str, Any]) -> dict[str, Any]:
+    crop = CROP_ID_TO_UI_CODE.get(int(user_crop["crop_type_id"]), "maiz")
+    sowing_date = user_crop["sowing_date"]
+    crop_id = _json_value(user_crop["id"])
+    display_name = user_crop.get("display_name") or _default_crop_name(crop, sowing_date)
     return {
-        "farm_id": _json_value(farm.get("id") if farm else None),
-        "farm_name": farm.get("farm_name") if farm else None,
-        "plot_id": _json_value(plot.get("id") if plot else cycle.get("plot_id")),
-        "plot_name": plot.get("plot_name") if plot else None,
-        "plant_name": cycle.get("season_label") or _default_crop_name(crop, sowing_date),
-        "crop_name": cycle.get("season_label") or (plot.get("plot_name") if plot else None) or _default_crop_name(crop, sowing_date),
-        "lat": _json_value(plot.get("centroid_lat") if plot else None),
-        "lon": _json_value(plot.get("centroid_lon") if plot else None),
-        "crop_cycle_id": _json_value(cycle["id"]),
+        "user_crop_id": crop_id,
+        "crop_cycle_id": crop_id,
+        "farm_id": None,
+        "farm_name": None,
+        "plot_id": None,
+        "plot_name": None,
+        "plant_name": display_name,
+        "crop_name": display_name,
+        "lat": _json_value(user_crop.get("lat")),
+        "lon": _json_value(user_crop.get("lon")),
         "crop": crop,
         "sowing_date": _json_value(sowing_date),
-        "status": cycle.get("status"),
+        "status": user_crop.get("status"),
     }
-
-
-def _get_plot(plot_id: Any) -> dict[str, Any] | None:
-    if not plot_id:
-        return None
-    rows = rest_select(
-        "plots",
-        {"select": "id,farm_id,plot_name,centroid_lat,centroid_lon", "id": f"eq.{plot_id}", "limit": "1"},
-    )
-    return rows[0] if rows else None
-
-
-def _get_farm(farm_id: Any) -> dict[str, Any] | None:
-    if not farm_id:
-        return None
-    rows = rest_select("farms", {"select": "id,farm_name", "id": f"eq.{farm_id}", "limit": "1"})
-    return rows[0] if rows else None
 
 
 def _default_crop_name(crop: str, sowing_date: date | str) -> str:
     crop_label = "Maiz" if crop in {"maiz", "maize"} else "Frijol"
     return f"{crop_label} {_json_value(sowing_date)}"
+
+
+def _coordinate_filter_value(value: float) -> str:
+    return f"{value:.6f}"
 
 
 def _json_value(value: Any) -> Any:

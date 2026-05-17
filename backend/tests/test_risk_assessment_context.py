@@ -152,6 +152,8 @@ class RiskAssessmentContextTests(unittest.TestCase):
         self.assertEqual(data["climate_state"]["dry_days"], 1)
         self.assertFalse(any("rain_sum_mm no estaba disponible" in item for item in data["assumptions"]))
         self.assertTrue(any("Forecast agregado" in item for item in data["derived_inputs"]))
+        self.assertEqual(geo.call_args.kwargs["observed_weather"], observed.return_value[0])
+        self.assertEqual(geo.call_args.kwargs["observed_meta"], observed.return_value[1])
 
     def test_plus_one_day_is_labeled_as_forecast_window(self):
         today = datetime.now(EL_SALVADOR_TZ).date()

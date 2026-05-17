@@ -10,4 +10,5 @@ mcp
 httpx
 zavudev
 openrouter
+langsmith
 PyJWT[crypto]==2.10.1

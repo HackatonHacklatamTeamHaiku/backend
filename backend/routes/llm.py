@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 from flask import Blueprint, jsonify, request
 
 from routes.request_validation import empty_param_error, invalid_request, repeated_param_error
@@ -45,5 +47,28 @@ def llm_chat():
     payload = request.get_json(silent=True) or {}
     if not isinstance(payload, dict):
         return invalid_request("JSON body must be an object")
-    data, meta, status = generate_chat_reply(payload)
+    conversation_id = _conversation_id_from_payload(payload)
+    request_id = request.headers.get("X-Request-ID") or str(uuid4())
+    data, meta, status = generate_chat_reply(
+        payload,
+        langsmith_extra={
+            "tags": ["api", "llm-chat", "thread"],
+            "metadata": {
+                "conversation_id": conversation_id,
+                "session_id": conversation_id,
+                "thread_id": conversation_id,
+                "request_id": request_id,
+                "route": "POST /api/llm/chat",
+            },
+        },
+    )
+    if isinstance(data, dict):
+        data.setdefault("conversation_id", conversation_id)
     return jsonify({"data": data, "meta": meta}), status
+
+
+def _conversation_id_from_payload(payload: dict) -> str:
+    raw = payload.get("conversation_id") or payload.get("thread_id") or payload.get("session_id")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()[:120]
+    return str(uuid4())

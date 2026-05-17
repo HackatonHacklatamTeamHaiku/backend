@@ -835,8 +835,11 @@ def get_geo_context(
     municipality: str | None = None,
     municipality_code: str | None = None,
     canton: str | None = None,
+    observed_weather: dict | None = None,
+    observed_meta: dict | None = None,
 ) -> tuple[dict, dict]:
-    observed_weather, observed_meta = get_weather_observed(lat, lon)
+    if observed_weather is None or observed_meta is None:
+        observed_weather, observed_meta = get_weather_observed(lat, lon)
     basins, basin_stale, basin_fetched_at = _get_basins()
     soils, soil_stale, soil_fetched_at = _get_soils()
     outlook, outlook_stale, outlook_fetched_at, outlook_warnings = _get_outlook(lat, lon, target_date)
@@ -960,6 +963,8 @@ def get_risk_assessment(arguments: dict) -> tuple[dict, dict, int]:
         municipality=arguments.get("municipality"),
         municipality_code=arguments.get("municipality_code"),
         canton=arguments.get("canton"),
+        observed_weather=observed,
+        observed_meta=observed_meta,
     )
     official = get_official_context(target_date)
 

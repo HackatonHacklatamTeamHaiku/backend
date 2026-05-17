@@ -88,3 +88,6 @@ class Config:
     ZAVU_SENDER_ID = os.getenv("ZAVU_SENDER_ID", "")
     ZAVU_WHATSAPP_TEMPLATE_ID = os.getenv("ZAVU_WHATSAPP_TEMPLATE_ID", "")
 
+    # ── Internal jobs ──────────────────────────────────────────
+    CRON_SECRET = os.getenv("CRON_SECRET", "")
+

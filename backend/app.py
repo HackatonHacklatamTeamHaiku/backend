@@ -53,6 +53,7 @@ def create_app() -> Flask:
     from routes.geo import bp as geo_bp
     from routes.risk import bp as risk_bp
     from routes.llm import bp as llm_bp
+    from routes.internal_jobs import bp as internal_jobs_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(canonical_bp)
@@ -61,6 +62,7 @@ def create_app() -> Flask:
     app.register_blueprint(geo_bp)
     app.register_blueprint(risk_bp)
     app.register_blueprint(llm_bp)
+    app.register_blueprint(internal_jobs_bp)
 
     # ── Root redirect ────────────────────────────────────────
     @app.route("/")
@@ -76,6 +78,7 @@ def create_app() -> Flask:
                 "/api/risk/assessment?crop=&sowing_date=&lat=&lon=",
                 "/api/llm/context",
                 "/api/llm/explain",
+                "/api/internal/jobs/daily-risk-alerts",
                 "/api/v1/documents/latest",
                 "/api/v1/ai/tools/manifest",
                 "/api/v1/ai/tools/call",

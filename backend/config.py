@@ -92,7 +92,7 @@ class Config:
     # ── OpenRouter / LLM ──────────────────────────────────────
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
     OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "")
-    OPENROUTER_FALLBACK_MODELS = os.getenv("OPENROUTER_FALLBACK_MODELS", "")
+    OPENROUTER_FALLBACK_MODELS = os.getenv("OPENROUTER_FALLBACK_MODELS", "openai/gpt-5.4-nano")
     OPENROUTER_HTTP_REFERER = os.getenv("OPENROUTER_HTTP_REFERER", "")
     OPENROUTER_TITLE = os.getenv("OPENROUTER_TITLE", "SATO-Agro Backend")
     OPENROUTER_CATEGORIES = os.getenv("OPENROUTER_CATEGORIES", "backend,agriculture")

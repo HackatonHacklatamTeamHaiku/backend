@@ -92,7 +92,7 @@ class OpenRouterLLMTests(unittest.TestCase):
             os.environ,
             {
                 "OPENROUTER_API_KEY": "test-key",
-                "OPENROUTER_FALLBACK_MODELS": "mistralai/mistral-medium-3.1",
+                "OPENROUTER_FALLBACK_MODELS": "openai/gpt-5.4-nano",
             },
             clear=False,
         ):
@@ -117,10 +117,10 @@ class OpenRouterLLMTests(unittest.TestCase):
         self.assertEqual(len(data["tool_calls"]), 1)
         self.assertEqual(data["tool_calls"][0]["tool_name"], "getRiskAssessment")
         self.assertEqual(data["requested_model"], "openai/gpt-5.4-pro")
-        self.assertEqual(data["routing_models"], ["openai/gpt-5.4-pro", "mistralai/mistral-medium-3.1"])
+        self.assertEqual(data["routing_models"], ["openai/gpt-5.4-pro", "openai/gpt-5.4-nano"])
         self.assertEqual(
             client.chat.calls[0]["models"],
-            ["openai/gpt-5.4-pro", "mistralai/mistral-medium-3.1"],
+            ["openai/gpt-5.4-pro", "openai/gpt-5.4-nano"],
         )
 
     def test_generate_chat_reply_requires_message(self):

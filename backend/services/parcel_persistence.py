@@ -51,6 +51,139 @@ def get_active_parcel_context(profile_id: str) -> dict[str, Any] | None:
         return _serialize_parcel_context(row) if row else None
 
 
+def list_crop_cycles(profile_id: str) -> list[dict[str, Any]]:
+    with get_dict_cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                farms.id AS farm_id,
+                farms.farm_name,
+                plots.id AS plot_id,
+                plots.plot_name,
+                plots.centroid_lat,
+                plots.centroid_lon,
+                crop_cycles.id AS crop_cycle_id,
+                crop_cycles.crop_type_id,
+                crop_cycles.season_label,
+                crop_cycles.sowing_date,
+                crop_cycles.status
+            FROM crop_cycles
+            JOIN plots ON plots.id = crop_cycles.plot_id
+            JOIN farms ON farms.id = plots.farm_id
+            WHERE crop_cycles.owner_profile_id = %s
+              AND crop_cycles.status <> 'archived'
+            ORDER BY crop_cycles.updated_at DESC, crop_cycles.created_at DESC
+            """,
+            (profile_id,),
+        )
+        return [_serialize_parcel_context(row) for row in cur.fetchall()]
+
+
+def create_crop_cycle(
+    *,
+    profile_id: str,
+    crop: str,
+    sowing_date: date,
+    lat: float,
+    lon: float,
+    crop_name: str | None = None,
+    farm_name: str = "Finca principal",
+) -> dict[str, Any]:
+    crop_type_id = CROP_CODE_TO_ID[crop]
+    safe_crop_name = crop_name or _default_crop_name(crop, sowing_date)
+
+    with get_dict_cursor() as cur:
+        cur.execute(
+            """
+            UPDATE profiles
+            SET default_lat = COALESCE(default_lat, %s),
+                default_lon = COALESCE(default_lon, %s),
+                onboarding_completed = true
+            WHERE id = %s
+            """,
+            (lat, lon, profile_id),
+        )
+        farm_id = _get_or_create_farm(
+            cur,
+            profile_id=profile_id,
+            farm_name=farm_name,
+            lat=lat,
+            lon=lon,
+        )
+        plot_id = _create_plot(
+            cur,
+            farm_id=farm_id,
+            plot_name=safe_crop_name,
+            lat=lat,
+            lon=lon,
+        )
+        cur.execute(
+            """
+            INSERT INTO crop_cycles (
+                plot_id,
+                owner_profile_id,
+                crop_type_id,
+                season_label,
+                sowing_date,
+                status
+            )
+            VALUES (%s, %s, %s, %s, %s, 'active')
+            RETURNING id
+            """,
+            (plot_id, profile_id, crop_type_id, safe_crop_name, sowing_date),
+        )
+        crop_cycle_id = str(cur.fetchone()["id"])
+        _upsert_crop_interest(cur, profile_id=profile_id, crop_type_id=crop_type_id)
+        return _get_crop_cycle_by_id(cur, profile_id=profile_id, crop_cycle_id=crop_cycle_id)
+
+
+def rename_crop_cycle(*, profile_id: str, crop_cycle_id: str, crop_name: str) -> dict[str, Any] | None:
+    with get_dict_cursor() as cur:
+        cur.execute(
+            """
+            UPDATE crop_cycles
+            SET season_label = %s
+            WHERE id = %s
+              AND owner_profile_id = %s
+              AND status <> 'archived'
+            RETURNING plot_id
+            """,
+            (crop_name, crop_cycle_id, profile_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+
+        cur.execute(
+            """
+            UPDATE plots
+            SET plot_name = %s
+            WHERE id = %s
+            """,
+            (crop_name, row["plot_id"]),
+        )
+        return _get_crop_cycle_by_id(cur, profile_id=profile_id, crop_cycle_id=crop_cycle_id)
+
+
+def archive_crop_cycle(*, profile_id: str, crop_cycle_id: str) -> dict[str, Any] | None:
+    with get_dict_cursor() as cur:
+        cur.execute(
+            """
+            UPDATE crop_cycles
+            SET status = 'archived'
+            WHERE id = %s
+              AND owner_profile_id = %s
+              AND status <> 'archived'
+            RETURNING id
+            """,
+            (crop_cycle_id, profile_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        return {"crop_cycle_id": str(row["id"]), "status": "archived"}
+
+
 def save_onboarding_parcel(
     *,
     profile_id: str,
@@ -205,6 +338,18 @@ def _get_or_create_plot(cur, *, farm_id: str, plot_name: str, lat: float, lon: f
     return str(cur.fetchone()["id"])
 
 
+def _create_plot(cur, *, farm_id: str, plot_name: str, lat: float, lon: float) -> str:
+    cur.execute(
+        """
+        INSERT INTO plots (farm_id, plot_name, centroid_lat, centroid_lon)
+        VALUES (%s, %s, %s, %s)
+        RETURNING id
+        """,
+        (farm_id, plot_name, lat, lon),
+    )
+    return str(cur.fetchone()["id"])
+
+
 def _get_or_create_crop_cycle(
     cur,
     *,
@@ -258,16 +403,62 @@ def _get_or_create_crop_cycle(
     return str(cur.fetchone()["id"])
 
 
+def _get_crop_cycle_by_id(cur, *, profile_id: str, crop_cycle_id: str) -> dict[str, Any] | None:
+    cur.execute(
+        """
+        SELECT
+            farms.id AS farm_id,
+            farms.farm_name,
+            plots.id AS plot_id,
+            plots.plot_name,
+            plots.centroid_lat,
+            plots.centroid_lon,
+            crop_cycles.id AS crop_cycle_id,
+            crop_cycles.crop_type_id,
+            crop_cycles.season_label,
+            crop_cycles.sowing_date,
+            crop_cycles.status
+        FROM crop_cycles
+        JOIN plots ON plots.id = crop_cycles.plot_id
+        JOIN farms ON farms.id = plots.farm_id
+        WHERE crop_cycles.id = %s
+          AND crop_cycles.owner_profile_id = %s
+        """,
+        (crop_cycle_id, profile_id),
+    )
+    row = cur.fetchone()
+    return _serialize_parcel_context(row) if row else None
+
+
+def _upsert_crop_interest(cur, *, profile_id: str, crop_type_id: int) -> None:
+    cur.execute(
+        """
+        INSERT INTO user_crop_interests (profile_id, crop_type_id, is_primary)
+        VALUES (%s, %s, true)
+        ON CONFLICT (profile_id, crop_type_id) DO UPDATE
+        SET is_primary = true
+        """,
+        (profile_id, crop_type_id),
+    )
+
+
+def _default_crop_name(crop: str, sowing_date: date) -> str:
+    crop_label = "Maiz" if crop in {"maiz", "maize"} else "Frijol"
+    return f"{crop_label} {sowing_date.isoformat()}"
+
+
 def _serialize_parcel_context(row: RealDictRow | dict[str, Any]) -> dict[str, Any]:
+    crop = CROP_ID_TO_UI_CODE.get(int(row["crop_type_id"]), "maiz")
     return {
         "farm_id": _json_value(row["farm_id"]),
         "farm_name": row.get("farm_name"),
         "plot_id": _json_value(row["plot_id"]),
         "plot_name": row.get("plot_name"),
+        "crop_name": row.get("season_label") or row.get("plot_name") or _default_crop_name(crop, row["sowing_date"]),
         "lat": _json_value(row.get("centroid_lat")),
         "lon": _json_value(row.get("centroid_lon")),
         "crop_cycle_id": _json_value(row["crop_cycle_id"]),
-        "crop": CROP_ID_TO_UI_CODE.get(int(row["crop_type_id"]), "maiz"),
+        "crop": crop,
         "sowing_date": _json_value(row["sowing_date"]),
         "status": row.get("status"),
     }

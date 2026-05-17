@@ -144,6 +144,77 @@ class ManifestRouteTests(unittest.TestCase):
         body = response.get_json()
         self.assertEqual(body["meta"]["upstream_status"], "invalid_request")
 
+    @patch("routes.crops.list_crop_cycles")
+    def test_crops_list_returns_user_cycles(self, mocked):
+        mocked.return_value = [
+            {
+                "crop_cycle_id": "cycle-1",
+                "crop_name": "Maiz de mayo",
+                "crop": "maiz",
+                "sowing_date": "2026-05-12",
+                "lat": 13.69,
+                "lon": -89.21,
+                "status": "active",
+            }
+        ]
+        response = self.app.get("/api/crops")
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertEqual(body[0]["crop_name"], "Maiz de mayo")
+        mocked.assert_called_once()
+
+    @patch("routes.crops.create_crop_cycle")
+    def test_crops_create_persists_user_cycle(self, mocked):
+        mocked.return_value = {
+            "crop_cycle_id": "cycle-2",
+            "crop_name": "Frijol norte",
+            "crop": "frijol",
+            "sowing_date": "2026-05-20",
+            "lat": 13.69,
+            "lon": -89.21,
+            "status": "active",
+        }
+        response = self.app.post(
+            "/api/crops",
+            json={
+                "crop_name": "Frijol norte",
+                "crop": "frijol",
+                "sowing_date": "2026-05-20",
+                "lat": 13.69,
+                "lon": -89.21,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertEqual(body["crop"], "frijol")
+        mocked.assert_called_once()
+
+    @patch("routes.crops.rename_crop_cycle")
+    def test_crops_rename_updates_user_cycle_name(self, mocked):
+        mocked.return_value = {
+            "crop_cycle_id": "cycle-1",
+            "crop_name": "Maiz renombrado",
+            "crop": "maiz",
+            "sowing_date": "2026-05-12",
+            "lat": 13.69,
+            "lon": -89.21,
+            "status": "active",
+        }
+        response = self.app.patch("/api/crops/cycle-1", json={"crop_name": "Maiz renombrado"})
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertEqual(body["crop_name"], "Maiz renombrado")
+        mocked.assert_called_once()
+
+    @patch("routes.crops.archive_crop_cycle")
+    def test_crops_delete_archives_user_cycle(self, mocked):
+        mocked.return_value = {"crop_cycle_id": "cycle-1", "status": "archived"}
+        response = self.app.delete("/api/crops/cycle-1")
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertEqual(body["status"], "archived")
+        mocked.assert_called_once()
+
     @patch("routes.risk.get_risk_assessment")
     def test_risk_assessment_route(self, mocked):
         mocked.return_value = ({"risk_level": "PREVENIR", "confidence": "media"}, {"cached": True}, 200)

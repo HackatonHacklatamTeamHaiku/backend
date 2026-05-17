@@ -8,6 +8,8 @@ from services.manifest_context import build_runtime_llm_context
 from services.semantic_tools import execute_semantic_tool, openrouter_tool_definitions
 from utils.time import now_utc_iso
 
+DEFAULT_FALLBACK_MODEL = "openai/gpt-5.4-nano"
+
 
 def generate_chat_reply(arguments: dict) -> tuple[dict, dict, int]:
     user_message = arguments.get("message")
@@ -140,7 +142,7 @@ def _build_openrouter_client():
 
 
 def _fallback_models() -> list[str] | None:
-    raw = os.getenv("OPENROUTER_FALLBACK_MODELS", "").strip()
+    raw = os.getenv("OPENROUTER_FALLBACK_MODELS", DEFAULT_FALLBACK_MODEL).strip()
     if not raw:
         return None
     return [item.strip() for item in raw.split(",") if item.strip()]

@@ -35,7 +35,9 @@ def fetch(lat: float, lon: float, forecast_days: int = 16) -> dict:
                 "soil_moisture_3_to_9cm",
                 "precipitation",
                 "temperature_2m",
+                "relative_humidity_2m",
                 "wind_speed_10m",
+                "wind_direction_10m",
             ]
         ),
         "forecast_days": forecast_days,

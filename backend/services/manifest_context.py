@@ -252,6 +252,106 @@ def _daily_series(raw: dict, key: str) -> list:
     return (raw.get("daily") or {}).get(key) or []
 
 
+def _series_item(series: list, index: int):
+    return series[index] if index < len(series) else None
+
+
+def _as_float(value):
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _open_meteo_present_fallback(raw: dict | None, reference_dt: datetime) -> dict:
+    if not raw:
+        return {}
+
+    reference_naive = reference_dt.replace(tzinfo=None)
+    fallback: dict = {"sources_used": ["open_meteo_forecast"]}
+
+    hourly = raw.get("hourly") or {}
+    hourly_times = hourly.get("time") or []
+    parsed_hours = []
+    for idx, value in enumerate(hourly_times):
+        try:
+            parsed_hours.append((idx, datetime.strptime(value, "%Y-%m-%dT%H:%M")))
+        except (TypeError, ValueError):
+            continue
+
+    if parsed_hours:
+        hour_idx, hour_value = min(parsed_hours, key=lambda item: abs(item[1] - reference_naive))
+        temp_hourly = _series_item(hourly.get("temperature_2m") or [], hour_idx)
+        humidity_hourly = _series_item(hourly.get("relative_humidity_2m") or [], hour_idx)
+        wind_hourly = _series_item(hourly.get("wind_speed_10m") or [], hour_idx)
+        wind_direction_hourly = _series_item(hourly.get("wind_direction_10m") or [], hour_idx)
+        precipitation_hourly = _series_item(hourly.get("precipitation") or [], hour_idx)
+
+        fallback["reference_time"] = hour_value.isoformat()
+        if (value := _as_float(temp_hourly)) is not None:
+            fallback["temperature_current_c"] = value
+        if (value := _as_float(humidity_hourly)) is not None:
+            fallback["humidity_relative_percent"] = value
+        if (value := _as_float(wind_hourly)) is not None:
+            fallback["wind_speed_kmh"] = value
+        if (value := _as_float(wind_direction_hourly)) is not None:
+            fallback["wind_direction_deg"] = value
+        if (value := _as_float(precipitation_hourly)) is not None:
+            fallback["is_raining"] = value > 0
+
+    forecast_dates = _forecast_dates(raw)
+    if reference_dt.date() in forecast_dates:
+        daily_idx = forecast_dates.index(reference_dt.date())
+        temp_max = _series_item(_daily_series(raw, "temperature_2m_max"), daily_idx)
+        temp_min = _series_item(_daily_series(raw, "temperature_2m_min"), daily_idx)
+        rain_sum = _series_item(_daily_series(raw, "precipitation_sum"), daily_idx)
+        wind_max = _series_item(_daily_series(raw, "wind_speed_10m_max"), daily_idx)
+
+        if (value := _as_float(temp_max)) is not None:
+            fallback["temperature_max_c"] = value
+        if (value := _as_float(temp_min)) is not None:
+            fallback["temperature_min_c"] = value
+        if (value := _as_float(rain_sum)) is not None:
+            fallback["rain_recent_mm"] = value
+        if "wind_speed_kmh" not in fallback and (value := _as_float(wind_max)) is not None:
+            fallback["wind_speed_kmh"] = value
+
+    return fallback
+
+
+OBSERVED_OPEN_METEO_FALLBACK_FIELDS = {
+    "rain_recent_mm": "Lluvia reciente faltante en SNET/MARN; se uso precipitation_sum de Open-Meteo para hoy.",
+    "temperature_current_c": "Temperatura actual faltante en SNET/MARN; se uso temperatura horaria de Open-Meteo.",
+    "temperature_max_c": "Temperatura maxima faltante en SNET/MARN; se uso temperatura maxima de Open-Meteo para hoy.",
+    "temperature_min_c": "Temperatura minima faltante en SNET/MARN; se uso temperatura minima de Open-Meteo para hoy.",
+    "humidity_relative_percent": "Humedad relativa faltante en SNET/MARN; se uso humedad horaria de Open-Meteo.",
+    "wind_speed_kmh": "Viento faltante en SNET/MARN; se uso viento horario de Open-Meteo.",
+    "wind_direction_deg": "Direccion del viento faltante en SNET/MARN; se uso direccion horaria de Open-Meteo.",
+    "is_raining": "Estado de lluvia faltante en SNET/MARN; se uso precipitacion horaria de Open-Meteo.",
+}
+
+
+def _missing_open_meteo_observed_fields(values: dict) -> list[str]:
+    return [
+        field_name
+        for field_name in OBSERVED_OPEN_METEO_FALLBACK_FIELDS
+        if values.get(field_name) is None
+    ]
+
+
+def _apply_open_meteo_observed_fallback(values: dict, fallback: dict) -> tuple[dict, list[str], list[str]]:
+    filled_fields: list[str] = []
+    warnings: list[str] = []
+    for field_name, warning in OBSERVED_OPEN_METEO_FALLBACK_FIELDS.items():
+        if values.get(field_name) is None and fallback.get(field_name) is not None:
+            values[field_name] = fallback[field_name]
+            filled_fields.append(field_name)
+            warnings.append(warning)
+    return values, filled_fields, warnings
+
+
 def _forecast_window_summary(raw: dict, reference_date: date, target_date: date) -> dict:
     forecast_dates = _forecast_dates(raw)
     if not forecast_dates:
@@ -447,11 +547,24 @@ def get_weather_observed(lat: float, lon: float) -> tuple[dict, dict]:
 
     sources_used: list[str] = []
     warnings: list[str] = []
+    fallback_sources: list[str] = []
+    field_sources: dict[str, str | None] = {
+        "rain_recent_mm": None,
+        "temperature_current_c": None,
+        "temperature_max_c": None,
+        "temperature_min_c": None,
+        "humidity_relative_percent": None,
+        "wind_speed_kmh": None,
+        "wind_direction_deg": None,
+        "is_raining": None,
+    }
 
     rain_distance = None
     if nearest_rain:
         rain_distance = round(haversine(lat, lon, nearest_rain["lat"], nearest_rain["lon"]), 2)
         sources_used.append("snet_lluvia_data_24h")
+        field_sources["rain_recent_mm"] = "snet_lluvia_data_24h"
+        field_sources["is_raining"] = "snet_lluvia_data_24h"
     else:
         warnings.append("No se encontro estacion de lluvia cercana.")
 
@@ -459,8 +572,75 @@ def get_weather_observed(lat: float, lon: float) -> tuple[dict, dict]:
     if nearest_obs:
         obs_distance = round(haversine(lat, lon, nearest_obs["lat"], nearest_obs["lon"]), 2)
         sources_used.extend(["snet_temperatura_actual_max_min", "snet_viento_promedio_2horas"])
+        temperature_values = nearest_obs.get("temperature") or {}
+        wind_values = nearest_obs.get("wind") or {}
+        if temperature_values.get("current_c") is not None:
+            field_sources["temperature_current_c"] = "snet_temperatura_actual_max_min"
+        if temperature_values.get("max_c") is not None:
+            field_sources["temperature_max_c"] = "snet_temperatura_actual_max_min"
+        if temperature_values.get("min_c") is not None:
+            field_sources["temperature_min_c"] = "snet_temperatura_actual_max_min"
+        if wind_values.get("speed") is not None:
+            field_sources["wind_speed_kmh"] = "snet_viento_promedio_2horas"
+        if wind_values.get("direction_deg") is not None:
+            field_sources["wind_direction_deg"] = "snet_viento_promedio_2horas"
+        if (
+            temperature_values.get("current_c") is None
+            and temperature_values.get("max_c") is None
+            and temperature_values.get("min_c") is None
+        ):
+            warnings.append("La fuente observada de temperatura no entrego valores para la estacion mas cercana.")
     else:
         warnings.append("No se encontro estacion meteorologica cercana.")
+
+    rain_recent_mm = nearest_rain.get("rain_mm_period") if nearest_rain else None
+    temperature_current_c = ((nearest_obs.get("temperature") or {}).get("current_c") if nearest_obs else None)
+    temperature_max_c = ((nearest_obs.get("temperature") or {}).get("max_c") if nearest_obs else None)
+    temperature_min_c = ((nearest_obs.get("temperature") or {}).get("min_c") if nearest_obs else None)
+    humidity_relative_percent = None
+    wind_speed_kmh = ((nearest_obs.get("wind") or {}).get("speed") if nearest_obs else None)
+    wind_direction_deg = ((nearest_obs.get("wind") or {}).get("direction_deg") if nearest_obs else None)
+    is_raining = nearest_rain.get("is_raining") if nearest_rain else None
+    observed_at = nearest_obs.get("observed_at_local") if nearest_obs else None
+    open_meteo_fallback_at = None
+
+    observed_values = {
+        "rain_recent_mm": rain_recent_mm,
+        "temperature_current_c": temperature_current_c,
+        "temperature_max_c": temperature_max_c,
+        "temperature_min_c": temperature_min_c,
+        "humidity_relative_percent": humidity_relative_percent,
+        "wind_speed_kmh": wind_speed_kmh,
+        "wind_direction_deg": wind_direction_deg,
+        "is_raining": is_raining,
+    }
+
+    if _missing_open_meteo_observed_fields(observed_values):
+        raw_forecast, forecast_stale, forecast_fetched_at = _get_forecast(lat, lon)
+        fallback = _open_meteo_present_fallback(raw_forecast, datetime.now(EL_SALVADOR_TZ))
+        if fallback:
+            forecast_source = "open_meteo_forecast"
+            observed_values, filled_fields, fallback_warnings = _apply_open_meteo_observed_fallback(observed_values, fallback)
+            for field_name in filled_fields:
+                field_sources[field_name] = forecast_source
+            if filled_fields:
+                fallback_sources.append(forecast_source)
+                warnings.extend(fallback_warnings)
+                open_meteo_fallback_at = fallback.get("reference_time")
+                sources_used.extend(fallback.get("sources_used") or [])
+        if forecast_stale:
+            warnings.append("Fallback Open-Meteo se obtuvo de cache desactualizado.")
+        if forecast_fetched_at:
+            obs_fetched_at = max([obs_fetched_at, forecast_fetched_at])
+
+    rain_recent_mm = observed_values["rain_recent_mm"]
+    temperature_current_c = observed_values["temperature_current_c"]
+    temperature_max_c = observed_values["temperature_max_c"]
+    temperature_min_c = observed_values["temperature_min_c"]
+    humidity_relative_percent = observed_values["humidity_relative_percent"]
+    wind_speed_kmh = observed_values["wind_speed_kmh"]
+    wind_direction_deg = observed_values["wind_direction_deg"]
+    is_raining = observed_values["is_raining"]
 
     data = {
         "source_type": "observado",
@@ -483,23 +663,28 @@ def get_weather_observed(lat: float, lon: float) -> tuple[dict, dict]:
             "distance_km": obs_distance,
             "confidence": _distance_confidence(obs_distance),
         } if nearest_obs and obs_distance is not None else None,
-        "rain_recent_mm": nearest_rain.get("rain_mm_period") if nearest_rain else None,
-        "temperature_current_c": ((nearest_obs.get("temperature") or {}).get("current_c") if nearest_obs else None),
-        "temperature_max_c": ((nearest_obs.get("temperature") or {}).get("max_c") if nearest_obs else None),
-        "temperature_min_c": ((nearest_obs.get("temperature") or {}).get("min_c") if nearest_obs else None),
-        "wind_speed_kmh": ((nearest_obs.get("wind") or {}).get("speed") if nearest_obs else None),
-        "wind_direction_deg": ((nearest_obs.get("wind") or {}).get("direction_deg") if nearest_obs else None),
-        "is_raining": nearest_rain.get("is_raining") if nearest_rain else None,
-        "observed_at": nearest_obs.get("observed_at_local") if nearest_obs else None,
+        "rain_recent_mm": rain_recent_mm,
+        "temperature_current_c": temperature_current_c,
+        "temperature_max_c": temperature_max_c,
+        "temperature_min_c": temperature_min_c,
+        "humidity_relative_percent": humidity_relative_percent,
+        "wind_speed_kmh": wind_speed_kmh,
+        "wind_direction_deg": wind_direction_deg,
+        "is_raining": is_raining,
+        "observed_at": observed_at,
         "rain_observed_at": nearest_rain.get("obs_time_latest_local") if nearest_rain else None,
-        "warnings": warnings,
+        "open_meteo_fallback_at": open_meteo_fallback_at,
+        "field_sources": field_sources,
+        "fallback_sources": list(dict.fromkeys(fallback_sources)),
+        "warnings": list(dict.fromkeys(warnings)),
         "sources_used": list(dict.fromkeys(sources_used)),
     }
 
+    used_fallback = bool(fallback_sources)
     meta = _build_meta(
         cached=bool(nearest_obs or nearest_rain),
         stale=obs_stale or rain_stale,
-        upstream_status="degraded" if (obs_stale or rain_stale) else "ok",
+        upstream_status="degraded" if (obs_stale or rain_stale or used_fallback) else "ok",
         fetched_at=max([ts for ts in (obs_fetched_at, rain_fetched_at) if ts], default=now_utc_iso()),
     )
     return data, meta
@@ -733,11 +918,13 @@ def get_risk_assessment(arguments: dict) -> tuple[dict, dict, int]:
         derived_inputs = []
         et0_sum_mm = None
         et0_mm_day = None
+        forecast_temp_max_c = None
         if raw_forecast:
             try:
                 today_summary = _forecast_window_summary(raw_forecast, reference_date, reference_date)
                 et0_sum_mm = today_summary["et0_sum_mm"]
                 et0_mm_day = today_summary["et0_mm_day"]
+                forecast_temp_max_c = today_summary.get("temp_max_c")
                 derived_inputs.append("ET0 de hoy tomado de Open-Meteo como demanda atmosferica modelada.")
             except ValueError as exc:
                 climate_payload["input_warnings"].append(str(exc))
@@ -754,12 +941,24 @@ def get_risk_assessment(arguments: dict) -> tuple[dict, dict, int]:
                 "et0_sum_mm": et0_sum_mm,
                 "days_window": 1,
                 "dry_days": dry_days,
-                "temp_max_c": observed.get("temperature_max_c") or observed.get("temperature_current_c"),
+                "temp_max_c": observed.get("temperature_max_c") or observed.get("temperature_current_c") or forecast_temp_max_c,
                 "wind_max_kmh": observed.get("wind_speed_kmh"),
                 "et0_mm_day": et0_mm_day,
                 "derived_inputs": derived_inputs,
             }
         )
+        if observed.get("temperature_max_c") is None and observed.get("temperature_current_c") is None and forecast_temp_max_c is not None:
+            climate_payload["derived_inputs"].append(
+                "Temperatura maxima de hoy tomada de Open-Meteo porque SNET/MARN no entrego temperatura observada."
+            )
+        observed_field_sources = observed.get("field_sources") or {}
+        if (
+            observed_field_sources.get("temperature_max_c") == "open_meteo_forecast"
+            or observed_field_sources.get("temperature_current_c") == "open_meteo_forecast"
+        ):
+            climate_payload["derived_inputs"].append(
+                "Temperatura de hoy tomada de Open-Meteo porque SNET/MARN no entrego temperatura observada."
+            )
     elif horizon == "gt_16_days":
         climate_payload.update(
             {

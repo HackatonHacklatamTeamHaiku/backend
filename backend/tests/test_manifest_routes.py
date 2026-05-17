@@ -101,6 +101,49 @@ class ManifestRouteTests(unittest.TestCase):
         self.assertEqual(body["email"], "testing@satoagro.local")
         self.assertEqual(body["profile"]["role"], "producer")
 
+    @patch("routes.onboarding.save_onboarding_parcel")
+    def test_onboarding_parcel_persists_authenticated_plot(self, mocked):
+        mocked.return_value = {
+            "farm_id": "farm-1",
+            "farm_name": "Finca principal",
+            "plot_id": "plot-1",
+            "plot_name": "Parcela principal",
+            "lat": 13.69,
+            "lon": -89.21,
+            "crop_cycle_id": "cycle-1",
+            "crop": "maiz",
+            "sowing_date": "2026-05-12",
+            "status": "active",
+        }
+        response = self.app.post(
+            "/api/onboarding/parcel",
+            json={
+                "crop": "maiz",
+                "sowing_date": "2026-05-12",
+                "lat": 13.69,
+                "lon": -89.21,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertEqual(body["plot_id"], "plot-1")
+        self.assertEqual(body["crop"], "maiz")
+        mocked.assert_called_once()
+
+    def test_onboarding_parcel_rejects_invalid_location(self):
+        response = self.app.post(
+            "/api/onboarding/parcel",
+            json={
+                "crop": "maiz",
+                "sowing_date": "2026-05-12",
+                "lat": 0,
+                "lon": 0,
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        body = response.get_json()
+        self.assertEqual(body["meta"]["upstream_status"], "invalid_request")
+
     @patch("routes.risk.get_risk_assessment")
     def test_risk_assessment_route(self, mocked):
         mocked.return_value = ({"risk_level": "PREVENIR", "confidence": "media"}, {"cached": True}, 200)

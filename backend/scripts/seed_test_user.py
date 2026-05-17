@@ -73,6 +73,7 @@ def seed_test_user(*, email: str, password: str, full_name: str, display_name: s
         cur.execute(
             """
             INSERT INTO auth.users (
+                instance_id,
                 id,
                 aud,
                 role,
@@ -88,6 +89,7 @@ def seed_test_user(*, email: str, password: str, full_name: str, display_name: s
                 is_anonymous
             )
             VALUES (
+                '00000000-0000-0000-0000-000000000000',
                 %s,
                 'authenticated',
                 'authenticated',
@@ -104,6 +106,7 @@ def seed_test_user(*, email: str, password: str, full_name: str, display_name: s
             )
             ON CONFLICT (id) DO UPDATE
             SET
+                instance_id = EXCLUDED.instance_id,
                 email = EXCLUDED.email,
                 encrypted_password = EXCLUDED.encrypted_password,
                 email_confirmed_at = EXCLUDED.email_confirmed_at,

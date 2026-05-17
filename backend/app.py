@@ -56,6 +56,7 @@ def create_app() -> Flask:
     from routes.geo import bp as geo_bp
     from routes.risk import bp as risk_bp
     from routes.llm import bp as llm_bp
+    from routes.onboarding import bp as onboarding_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)
@@ -65,6 +66,7 @@ def create_app() -> Flask:
     app.register_blueprint(geo_bp)
     app.register_blueprint(risk_bp)
     app.register_blueprint(llm_bp)
+    app.register_blueprint(onboarding_bp)
 
     # ── Root redirect ────────────────────────────────────────
     @app.route("/")
@@ -79,6 +81,7 @@ def create_app() -> Flask:
                 "/api/geo/context?lat=&lon=",
                 "/api/risk/assessment?crop=&sowing_date=&lat=&lon=",
                 "/api/auth/me",
+                "/api/onboarding/parcel",
                 "/api/llm/context",
                 "/api/llm/explain",
                 "/api/llm/chat",

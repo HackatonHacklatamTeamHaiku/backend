@@ -164,6 +164,7 @@ def _load_system_prompt() -> str:
     candidate_paths = []
     if configured:
         candidate_paths.append(Path(configured))
+    candidate_paths.append(Path(__file__).resolve().parents[1] / "prompts" / "sato_agro_system_prompt.md")
     candidate_paths.append(
         Path(__file__).resolve().parents[3] / "infra---data-I-plus-D" / "model" / "SYSTEM_PROMPT.md"
     )

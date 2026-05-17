@@ -59,6 +59,7 @@ def create_app() -> Flask:
     from routes.onboarding import bp as onboarding_bp
     from routes.profile import bp as profile_bp
     from routes.crops import bp as crops_bp
+    from routes.plants import bp as plants_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)
@@ -71,6 +72,7 @@ def create_app() -> Flask:
     app.register_blueprint(onboarding_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(crops_bp)
+    app.register_blueprint(plants_bp)
 
     # ── Root redirect ────────────────────────────────────────
     @app.route("/")
@@ -86,6 +88,7 @@ def create_app() -> Flask:
                 "/api/risk/assessment?crop=&sowing_date=&lat=&lon=",
                 "/api/auth/me",
                 "/api/profile",
+                "/api/plants",
                 "/api/crops",
                 "/api/onboarding/parcel",
                 "/api/llm/context",

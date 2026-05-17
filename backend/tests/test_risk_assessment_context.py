@@ -264,6 +264,93 @@ class RiskAssessmentContextTests(unittest.TestCase):
         self.assertIn("no un pronostico puntual", result["summary"])
         self.assertIn("Alerta secundaria", result["summary"])
 
+    def test_llm_explain_formats_factor_phrases_without_duplicate_words(self):
+        result = manifest_context.explain_recommendation(
+            {
+                "risk_assessment": {
+                    "risk_level": "PREVENIR",
+                    "confidence": "alta",
+                    "risk_factors": [
+                        {"label": "Deficit hidrico", "state": "deficit severo"},
+                        {"label": "Calor", "state": "calor critico"},
+                        {"label": "Contexto estacional", "state": "vigilancia seca"},
+                    ],
+                    "secondary_alerts": [],
+                },
+                "plant_state": {"phase": "Germinacion/emergencia"},
+                "recommendations": ["Revisar humedad del suelo."],
+                "official_context": {"canicula_2026_watch": True},
+            }
+        )
+
+        summary = result["summary"]
+        self.assertIn("deficit hidrico severo", summary)
+        self.assertIn("calor critico", summary)
+        self.assertIn("contexto estacional con vigilancia seca", summary)
+        self.assertNotIn("deficit hidrico deficit", summary)
+        self.assertNotIn("calor calor", summary)
+
+    def test_llm_runtime_context_separates_today_from_selected_target_date(self):
+        today = datetime.now(EL_SALVADOR_TZ).date()
+        target = today + timedelta(days=14)
+
+        risk_payload = {
+            "target_date": target.isoformat(),
+            "horizon": "plus_16_days",
+            "risk_score": 0.42,
+            "risk_level_base": "NORMAL",
+            "risk_level": "NORMAL",
+            "confidence": "alta",
+            "horizon_confidence": "alta",
+            "data_quality_confidence": "alta",
+            "confidence_reasons": [],
+            "plant_state": {
+                "days_after_sowing": 14,
+                "phase": "Vegetativo",
+                "phase_code": "V2_V4",
+            },
+            "climate_state": {},
+            "risk_factors": [],
+            "risk_overrides": [],
+            "secondary_alerts": [],
+            "risk_window_weather": {},
+            "observed_weather": {},
+            "forecast_weather": {},
+            "source_roles": {},
+            "derived_inputs": [],
+            "assumptions": [],
+            "input_warnings": [],
+            "recommendations": [],
+            "official_context": {},
+            "sources_used": [],
+        }
+
+        with patch.object(
+            manifest_context,
+            "get_risk_assessment",
+            return_value=(risk_payload, {"upstream_status": "ok"}, 200),
+        ):
+            context, _, status = manifest_context.build_runtime_llm_context(
+                {
+                    "crop": "frijol",
+                    "sowing_date": today.isoformat(),
+                    "lat": 13.69,
+                    "lon": -89.21,
+                    "target_date": target.isoformat(),
+                }
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(context["current_date"], today.isoformat())
+        self.assertEqual(context["temporal_context"]["sowing_date"], today.isoformat())
+        self.assertFalse(context["temporal_context"]["is_selected_target_today"])
+        self.assertEqual(context["current_plant_state"]["days_after_sowing"], 0)
+        self.assertEqual(context["current_plant_state"]["phase"], "Germinacion/emergencia")
+        self.assertEqual(context["target_plant_state"]["days_after_sowing"], 14)
+        self.assertEqual(context["target_plant_state"]["phase"], "Vegetativo")
+        self.assertEqual(context["plant_state"]["days_after_sowing"], 14)
+        self.assertIn("Use current_plant_state", context["temporal_context"]["usage_rule"])
+
     def test_llm_explain_mentions_degraded_data_quality(self):
         result = manifest_context.explain_recommendation(
             {

@@ -415,6 +415,29 @@ def get_phenology_context(crop: str, sowing_date: str, target_date: str | None =
     }
 
 
+def _plant_state_for_date(crop: str, sowing_date: date, target_date: date, temporal_reference: str) -> dict:
+    days_after_sowing = (target_date - sowing_date).days
+    if days_after_sowing < 0:
+        return {
+            "days_after_sowing": days_after_sowing,
+            "phase": "Aun no sembrado",
+            "phase_code": "PRE_SOWING",
+            "target_date": target_date.isoformat(),
+            "temporal_reference": temporal_reference,
+            "source": "sato_agro_phenology_table_v1",
+        }
+
+    phase_code, phase = phase_for(crop, days_after_sowing)
+    return {
+        "days_after_sowing": days_after_sowing,
+        "phase": phase["phase"],
+        "phase_code": phase_code,
+        "target_date": target_date.isoformat(),
+        "temporal_reference": temporal_reference,
+        "source": "sato_agro_phenology_table_v1",
+    }
+
+
 def get_weather_observed(lat: float, lon: float) -> tuple[dict, dict]:
     observations, obs_stale, obs_fetched_at = _get_observations()
     rainfall, rain_stale, rain_fetched_at = _get_rainfall()
@@ -887,10 +910,21 @@ def build_runtime_llm_context(arguments: dict) -> tuple[dict, dict, int]:
     if status != 200:
         return risk, meta, status
 
-    selected_target_date = target_date or datetime.now(EL_SALVADOR_TZ).date().isoformat()
+    current_date = datetime.now(EL_SALVADOR_TZ).date()
+    selected_target_date = target_date or current_date.isoformat()
+    selected_target = _parse_request_date(selected_target_date, "target_date")
+    parsed_sowing = _parse_request_date(sowing_date, "sowing_date")
     current_datetime = datetime.now(EL_SALVADOR_TZ).isoformat()
+    current_plant_state = _plant_state_for_date(crop, parsed_sowing, current_date, "current_date")
+    target_plant_state = {
+        **risk["plant_state"],
+        "target_date": risk["target_date"],
+        "temporal_reference": "selected_target_date",
+        "source": "sato_agro_phenology_table_v1",
+    }
     context = {
         "current_datetime": current_datetime,
+        "current_date": current_date.isoformat(),
         "timezone": "America/El_Salvador",
         "user_inputs": {
             "crop": crop,
@@ -903,10 +937,24 @@ def build_runtime_llm_context(arguments: dict) -> tuple[dict, dict, int]:
             "selected_horizon": risk["horizon"],
             "visible_panel": arguments.get("visible_panel", "risk_summary"),
         },
+        "temporal_context": {
+            "current_date": current_date.isoformat(),
+            "selected_target_date": selected_target_date,
+            "is_selected_target_today": selected_target == current_date,
+            "sowing_date": parsed_sowing.isoformat(),
+            "current_days_after_sowing": current_plant_state["days_after_sowing"],
+            "target_days_after_sowing": target_plant_state["days_after_sowing"],
+            "usage_rule": (
+                "Use current_plant_state when saying hoy/current. "
+                "Use target_plant_state only when explicitly discussing ui_state.selected_target_date."
+            ),
+        },
         "missing_required_user_data": [],
+        "current_plant_state": current_plant_state,
+        "target_plant_state": target_plant_state,
         "plant_state": {
-            **risk["plant_state"],
-            "source": "sato_agro_phenology_table_v1",
+            **target_plant_state,
+            "note": "This is the selected target-date plant state, not necessarily today's plant state.",
         },
         "observed_weather": risk["observed_weather"],
         "forecast_weather": risk["forecast_weather"],
@@ -997,7 +1045,7 @@ def explain_recommendation(payload: dict) -> dict:
         label = factor.get("label")
         state = factor.get("state")
         if label and state:
-            factor_bits.append(f"{label.lower()} {state}")
+            factor_bits.append(_format_explanation_factor(label, state))
     factor_text = ", ".join(factor_bits[:3]) if factor_bits else "senal climatica relevante"
 
     confidence_text = f"confianza de horizonte {horizon_confidence}"
@@ -1033,3 +1081,34 @@ def explain_recommendation(payload: dict) -> dict:
             "historical": "solo contexto, no alerta actual",
         },
     }
+
+
+def _format_explanation_factor(label, state) -> str:
+    label_text = _clean_explanation_text(label)
+    state_text = _clean_explanation_text(state)
+    if not label_text:
+        return state_text
+    if not state_text:
+        return label_text
+
+    if label_text in {"deficit hidrico", "deficit de agua"}:
+        if state_text.startswith("sin deficit"):
+            suffix = state_text.removeprefix("sin deficit").strip()
+            return f"sin deficit hidrico {suffix}".strip()
+        if state_text.startswith("deficit "):
+            return f"deficit hidrico {state_text.removeprefix('deficit ').strip()}".strip()
+
+    if label_text in {"calor", "estres termico", "heat stress"} and state_text.startswith("calor "):
+        return state_text
+
+    if label_text == "secado rapido" and state_text.startswith("secado rapido "):
+        return state_text
+
+    if state_text.startswith(label_text):
+        return state_text
+
+    return f"{label_text} con {state_text}"
+
+
+def _clean_explanation_text(value) -> str:
+    return " ".join(str(value).replace("_", " ").strip().lower().split())

@@ -79,18 +79,18 @@ def list_crop_cycles(profile_id: str) -> list[dict[str, Any]]:
         return [_serialize_parcel_context(row) for row in cur.fetchall()]
 
 
-def create_crop_cycle(
+def create_plant_cycle(
     *,
     profile_id: str,
     crop: str,
     sowing_date: date,
     lat: float,
     lon: float,
-    crop_name: str | None = None,
+    plant_name: str | None = None,
     farm_name: str = "Finca principal",
 ) -> dict[str, Any]:
     crop_type_id = CROP_CODE_TO_ID[crop]
-    safe_crop_name = crop_name or _default_crop_name(crop, sowing_date)
+    safe_plant_name = plant_name or _default_crop_name(crop, sowing_date)
 
     with get_dict_cursor() as cur:
         cur.execute(
@@ -110,10 +110,9 @@ def create_crop_cycle(
             lat=lat,
             lon=lon,
         )
-        plot_id = _create_plot(
+        plot_id = _get_or_create_primary_plot(
             cur,
             farm_id=farm_id,
-            plot_name=safe_crop_name,
             lat=lat,
             lon=lon,
         )
@@ -130,14 +129,14 @@ def create_crop_cycle(
             VALUES (%s, %s, %s, %s, %s, 'active')
             RETURNING id
             """,
-            (plot_id, profile_id, crop_type_id, safe_crop_name, sowing_date),
+            (plot_id, profile_id, crop_type_id, safe_plant_name, sowing_date),
         )
         crop_cycle_id = str(cur.fetchone()["id"])
         _upsert_crop_interest(cur, profile_id=profile_id, crop_type_id=crop_type_id)
         return _get_crop_cycle_by_id(cur, profile_id=profile_id, crop_cycle_id=crop_cycle_id)
 
 
-def rename_crop_cycle(*, profile_id: str, crop_cycle_id: str, crop_name: str) -> dict[str, Any] | None:
+def rename_plant_cycle(*, profile_id: str, crop_cycle_id: str, plant_name: str) -> dict[str, Any] | None:
     with get_dict_cursor() as cur:
         cur.execute(
             """
@@ -148,24 +147,15 @@ def rename_crop_cycle(*, profile_id: str, crop_cycle_id: str, crop_name: str) ->
               AND status <> 'archived'
             RETURNING plot_id
             """,
-            (crop_name, crop_cycle_id, profile_id),
+            (plant_name, crop_cycle_id, profile_id),
         )
         row = cur.fetchone()
         if not row:
             return None
-
-        cur.execute(
-            """
-            UPDATE plots
-            SET plot_name = %s
-            WHERE id = %s
-            """,
-            (crop_name, row["plot_id"]),
-        )
         return _get_crop_cycle_by_id(cur, profile_id=profile_id, crop_cycle_id=crop_cycle_id)
 
 
-def archive_crop_cycle(*, profile_id: str, crop_cycle_id: str) -> dict[str, Any] | None:
+def archive_plant_cycle(*, profile_id: str, crop_cycle_id: str) -> dict[str, Any] | None:
     with get_dict_cursor() as cur:
         cur.execute(
             """
@@ -182,6 +172,12 @@ def archive_crop_cycle(*, profile_id: str, crop_cycle_id: str) -> dict[str, Any]
         if not row:
             return None
         return {"crop_cycle_id": str(row["id"]), "status": "archived"}
+
+
+# Backwards-compatible service aliases while callers migrate from crop wording to plant wording.
+create_crop_cycle = create_plant_cycle
+rename_crop_cycle = rename_plant_cycle
+archive_crop_cycle = archive_plant_cycle
 
 
 def save_onboarding_parcel(
@@ -338,14 +334,38 @@ def _get_or_create_plot(cur, *, farm_id: str, plot_name: str, lat: float, lon: f
     return str(cur.fetchone()["id"])
 
 
-def _create_plot(cur, *, farm_id: str, plot_name: str, lat: float, lon: float) -> str:
+def _get_or_create_primary_plot(cur, *, farm_id: str, lat: float, lon: float) -> str:
+    cur.execute(
+        """
+        SELECT id
+        FROM plots
+        WHERE farm_id = %s
+        ORDER BY created_at ASC
+        LIMIT 1
+        """,
+        (farm_id,),
+    )
+    row = cur.fetchone()
+    if row:
+        plot_id = str(row["id"])
+        cur.execute(
+            """
+            UPDATE plots
+            SET centroid_lat = %s,
+                centroid_lon = %s
+            WHERE id = %s
+            """,
+            (lat, lon, plot_id),
+        )
+        return plot_id
+
     cur.execute(
         """
         INSERT INTO plots (farm_id, plot_name, centroid_lat, centroid_lon)
         VALUES (%s, %s, %s, %s)
         RETURNING id
         """,
-        (farm_id, plot_name, lat, lon),
+        (farm_id, "Parcela principal", lat, lon),
     )
     return str(cur.fetchone()["id"])
 
@@ -454,6 +474,7 @@ def _serialize_parcel_context(row: RealDictRow | dict[str, Any]) -> dict[str, An
         "farm_name": row.get("farm_name"),
         "plot_id": _json_value(row["plot_id"]),
         "plot_name": row.get("plot_name"),
+        "plant_name": row.get("season_label") or _default_crop_name(crop, row["sowing_date"]),
         "crop_name": row.get("season_label") or row.get("plot_name") or _default_crop_name(crop, row["sowing_date"]),
         "lat": _json_value(row.get("centroid_lat")),
         "lon": _json_value(row.get("centroid_lon")),

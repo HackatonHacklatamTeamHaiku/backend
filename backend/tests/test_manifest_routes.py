@@ -215,6 +215,54 @@ class ManifestRouteTests(unittest.TestCase):
         self.assertEqual(body["status"], "archived")
         mocked.assert_called_once()
 
+    @patch("routes.plants.create_plant_cycle")
+    def test_plants_create_persists_plant_on_primary_parcel(self, mocked):
+        mocked.return_value = {
+            "crop_cycle_id": "cycle-plant-1",
+            "plant_name": "Milpa norte",
+            "crop_name": "Milpa norte",
+            "plot_id": "plot-1",
+            "plot_name": "Parcela principal",
+            "crop": "maiz",
+            "sowing_date": "2026-05-20",
+            "lat": 13.69,
+            "lon": -89.21,
+            "status": "active",
+        }
+        response = self.app.post(
+            "/api/plants",
+            json={
+                "plant_name": "Milpa norte",
+                "crop": "maiz",
+                "sowing_date": "2026-05-20",
+                "lat": 13.69,
+                "lon": -89.21,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertEqual(body["plant_name"], "Milpa norte")
+        self.assertEqual(body["plot_id"], "plot-1")
+        mocked.assert_called_once()
+
+    @patch("routes.plants.rename_plant_cycle")
+    def test_plants_rename_updates_plant_name(self, mocked):
+        mocked.return_value = {
+            "crop_cycle_id": "cycle-plant-1",
+            "plant_name": "Milpa sur",
+            "crop_name": "Milpa sur",
+            "crop": "maiz",
+            "sowing_date": "2026-05-20",
+            "lat": 13.69,
+            "lon": -89.21,
+            "status": "active",
+        }
+        response = self.app.patch("/api/plants/cycle-plant-1", json={"plant_name": "Milpa sur"})
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertEqual(body["plant_name"], "Milpa sur")
+        mocked.assert_called_once()
+
     @patch("routes.risk.get_risk_assessment")
     def test_risk_assessment_route(self, mocked):
         mocked.return_value = ({"risk_level": "PREVENIR", "confidence": "media"}, {"cached": True}, 200)

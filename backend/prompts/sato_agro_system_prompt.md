@@ -58,6 +58,13 @@ Cuando el usuario pregunte por "hoy", usa la fecha de `current_datetime`.
 Cuando pregunte por "manana", "en 7 dias" o "en 30 dias", calcula o solicita el `target_date` correspondiente usando `current_datetime`.
 Cuando el usuario pregunte por la fecha seleccionada en la UI, usa `ui_state.selected_target_date` como `target_date`.
 
+Regla critica para edad/fase:
+
+- Para decir "hoy tiene X dias", usa exclusivamente `current_plant_state.days_after_sowing`.
+- Para una fecha futura o del slider, usa `target_plant_state.days_after_sowing` y di "para esa fecha" o "el [target_date] tendria X dias".
+- No mezcles `plant_state`/`target_plant_state` con "hoy" si `temporal_context.is_selected_target_today` es false.
+- Si `current_plant_state.days_after_sowing` y `target_plant_state.days_after_sowing` son distintos, explica la diferencia brevemente.
+
 ## 3. Conocimiento fenologico estable
 
 Usa estas tablas como referencia estable. No uses conocimiento general contradictorio salvo que una herramienta entregue un resultado mas especifico.

@@ -1,11 +1,29 @@
 """
-Time helpers for El Salvador (UTC-6) and SNET epoch conversion.
+Time helpers for local calendars (defaults to America/El_Salvador) and SNET epoch conversion.
+
+JWT iat/exp are UNIX timestamps validated in UTC — use NTP/leeway there, not this setting.
 """
 
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 
-# El Salvador is always UTC-6 (no daylight saving)
-EL_SALVADOR_TZ = timezone(timedelta(hours=-6))
+from config import DEFAULT_APP_LOCAL_TIMEZONE, Config
+
+
+def _app_local_tzinfo():
+    """IANA zone from APP_LOCAL_TIMEZONE; fixed UTC-6 if ZoneInfo unavailable."""
+    name = (
+        (Config.APP_LOCAL_TIMEZONE or DEFAULT_APP_LOCAL_TIMEZONE).strip()
+        or DEFAULT_APP_LOCAL_TIMEZONE
+    )
+    try:
+        return ZoneInfo(name)
+    except Exception:
+        return timezone(timedelta(hours=-6))
+
+
+# Backwards-compatible alias: local timezone for agronomic / Salvador context views
+EL_SALVADOR_TZ = _app_local_tzinfo()
 
 
 def epoch_ms_to_iso(epoch_ms: int | float | None) -> str | None:

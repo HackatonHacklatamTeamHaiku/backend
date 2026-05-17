@@ -13,6 +13,9 @@ from dotenv import load_dotenv
 _env_path = Path(__file__).resolve().parent / ".env"
 load_dotenv(_env_path)
 
+# IANA timezone when APP_LOCAL_TIMEZONE is missing, empty, or whitespace-only (El Salvador).
+DEFAULT_APP_LOCAL_TIMEZONE = "America/El_Salvador"
+
 
 class Config:
     """Base configuration."""
@@ -91,12 +94,21 @@ class Config:
     # ── Internal jobs ──────────────────────────────────────────
     CRON_SECRET = os.getenv("CRON_SECRET", "")
 
+    # ── Localization (display / calendars; JWT still uses UNIX UTC) ─
+    # If APP_LOCAL_TIMEZONE is unset / blank, use El Salvador by default (see DEFAULT_APP_LOCAL_TIMEZONE).
+    APP_LOCAL_TIMEZONE = (
+        (os.getenv("APP_LOCAL_TIMEZONE") or "").strip()
+        or DEFAULT_APP_LOCAL_TIMEZONE
+    )
+
     # ── Auth / JWT ─────────────────────────────────────────────
     AUTH_ENABLED = os.getenv("AUTH_ENABLED", "true").lower() == "true"
     AUTH_BYPASS_FOR_TESTING = os.getenv("AUTH_BYPASS_FOR_TESTING", "false").lower() == "true"
     SUPABASE_JWT_ISSUER = os.getenv("SUPABASE_JWT_ISSUER", "")
     SUPABASE_JWT_AUDIENCE = os.getenv("SUPABASE_JWT_AUDIENCE", "authenticated")
     SUPABASE_JWKS_TTL = int(os.getenv("SUPABASE_JWKS_TTL", "3600"))
+    # Tolerancia de reloj (s) entre emisor Supabase y este servidor para iat/exp (p. ej. NTP +-1–2 s).
+    JWT_VALIDATE_LEEWAY_SECONDS = max(0, int(os.getenv("JWT_VALIDATE_LEEWAY_SECONDS", "60")))
 
     # ── OpenRouter / LLM ──────────────────────────────────────
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")

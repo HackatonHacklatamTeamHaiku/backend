@@ -105,6 +105,7 @@ def verify_supabase_access_token(token: str) -> dict:
             audience=audience or None,
             issuer=issuer,
             options=options | {"verify_aud": bool(audience)},
+            leeway=Config.JWT_VALIDATE_LEEWAY_SECONDS,
         )
     except InvalidTokenError as exc:
         raise AuthError(f"JWT verification failed: {exc}", 401, "invalid_token") from exc

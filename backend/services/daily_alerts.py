@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from services.alert_messages import build_whatsapp_risk_alert, should_send_risk_alert
 from services.database import get_dict_cursor
@@ -13,7 +13,10 @@ from services.manifest_context import get_risk_assessment
 from services.zavu_notifications import ZavuNotificationClient
 
 
-EL_SALVADOR_TZ = ZoneInfo("America/El_Salvador")
+try:
+    EL_SALVADOR_TZ = ZoneInfo("America/El_Salvador")
+except ZoneInfoNotFoundError:
+    EL_SALVADOR_TZ = timezone(timedelta(hours=-6), "America/El_Salvador")
 DEFAULT_LIMIT = 500
 CROP_CODE_MAP = {
     "maize": "maiz",

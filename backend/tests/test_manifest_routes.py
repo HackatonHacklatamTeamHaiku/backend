@@ -14,7 +14,9 @@ from app import create_app
 
 class ManifestRouteTests(unittest.TestCase):
     def setUp(self):
-        self.app = create_app().test_client()
+        app = create_app()
+        app.config.update(TESTING=True, AUTH_BYPASS_FOR_TESTING=True)
+        self.app = app.test_client()
 
     @patch("routes.weather.get_weather_observed")
     def test_weather_observed_route(self, mocked):
@@ -52,6 +54,13 @@ class ManifestRouteTests(unittest.TestCase):
         body = response.get_json()
         self.assertEqual(body["meta"]["upstream_status"], "invalid_request")
 
+    def test_llm_context_supports_official_only_mode(self):
+        response = self.app.get("/api/llm/context?target_date=2026-08-15")
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertIn("official_context", body)
+        self.assertEqual(body["user_inputs"]["crop"], None)
+
     def test_llm_explain_rejects_malformed_payloads(self):
         cases = [
             {},
@@ -85,6 +94,175 @@ class ManifestRouteTests(unittest.TestCase):
         body = response.get_json()
         self.assertIn("Vegetativo temprano", body["data"]["summary"])
 
+    def test_auth_me_returns_testing_user_when_auth_bypass_enabled(self):
+        response = self.app.get("/api/auth/me")
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertEqual(body["email"], "testing@satoagro.local")
+        self.assertEqual(body["profile"]["role"], "producer")
+
+    @patch("routes.onboarding.save_onboarding_parcel")
+    def test_onboarding_parcel_persists_authenticated_plot(self, mocked):
+        mocked.return_value = {
+            "farm_id": "farm-1",
+            "farm_name": "Finca principal",
+            "plot_id": "plot-1",
+            "plot_name": "Parcela principal",
+            "lat": 13.69,
+            "lon": -89.21,
+            "crop_cycle_id": "cycle-1",
+            "crop": "maiz",
+            "sowing_date": "2026-05-12",
+            "status": "active",
+        }
+        response = self.app.post(
+            "/api/onboarding/parcel",
+            json={
+                "crop": "maiz",
+                "sowing_date": "2026-05-12",
+                "lat": 13.69,
+                "lon": -89.21,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertEqual(body["plot_id"], "plot-1")
+        self.assertEqual(body["crop"], "maiz")
+        mocked.assert_called_once()
+
+    def test_onboarding_parcel_rejects_invalid_location(self):
+        response = self.app.post(
+            "/api/onboarding/parcel",
+            json={
+                "crop": "maiz",
+                "sowing_date": "2026-05-12",
+                "lat": 0,
+                "lon": 0,
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        body = response.get_json()
+        self.assertEqual(body["meta"]["upstream_status"], "invalid_request")
+
+    @patch("routes.crops.list_crop_cycles")
+    def test_crops_list_returns_user_cycles(self, mocked):
+        mocked.return_value = [
+            {
+                "crop_cycle_id": "cycle-1",
+                "crop_name": "Maiz de mayo",
+                "crop": "maiz",
+                "sowing_date": "2026-05-12",
+                "lat": 13.69,
+                "lon": -89.21,
+                "status": "active",
+            }
+        ]
+        response = self.app.get("/api/crops")
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertEqual(body[0]["crop_name"], "Maiz de mayo")
+        mocked.assert_called_once()
+
+    @patch("routes.crops.create_crop_cycle")
+    def test_crops_create_persists_user_cycle(self, mocked):
+        mocked.return_value = {
+            "crop_cycle_id": "cycle-2",
+            "crop_name": "Frijol norte",
+            "crop": "frijol",
+            "sowing_date": "2026-05-20",
+            "lat": 13.69,
+            "lon": -89.21,
+            "status": "active",
+        }
+        response = self.app.post(
+            "/api/crops",
+            json={
+                "crop_name": "Frijol norte",
+                "crop": "frijol",
+                "sowing_date": "2026-05-20",
+                "lat": 13.69,
+                "lon": -89.21,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertEqual(body["crop"], "frijol")
+        mocked.assert_called_once()
+
+    @patch("routes.crops.rename_crop_cycle")
+    def test_crops_rename_updates_user_cycle_name(self, mocked):
+        mocked.return_value = {
+            "crop_cycle_id": "cycle-1",
+            "crop_name": "Maiz renombrado",
+            "crop": "maiz",
+            "sowing_date": "2026-05-12",
+            "lat": 13.69,
+            "lon": -89.21,
+            "status": "active",
+        }
+        response = self.app.patch("/api/crops/cycle-1", json={"crop_name": "Maiz renombrado"})
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertEqual(body["crop_name"], "Maiz renombrado")
+        mocked.assert_called_once()
+
+    @patch("routes.crops.archive_crop_cycle")
+    def test_crops_delete_archives_user_cycle(self, mocked):
+        mocked.return_value = {"crop_cycle_id": "cycle-1", "status": "archived"}
+        response = self.app.delete("/api/crops/cycle-1")
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertEqual(body["status"], "archived")
+        mocked.assert_called_once()
+
+    @patch("routes.plants.create_plant_cycle")
+    def test_plants_create_persists_plant_on_primary_parcel(self, mocked):
+        mocked.return_value = {
+            "crop_cycle_id": "cycle-plant-1",
+            "plant_name": "Milpa norte",
+            "crop_name": "Milpa norte",
+            "plot_id": "plot-1",
+            "plot_name": "Parcela principal",
+            "crop": "maiz",
+            "sowing_date": "2026-05-20",
+            "lat": 13.69,
+            "lon": -89.21,
+            "status": "active",
+        }
+        response = self.app.post(
+            "/api/plants",
+            json={
+                "plant_name": "Milpa norte",
+                "crop": "maiz",
+                "sowing_date": "2026-05-20",
+                "lat": 13.69,
+                "lon": -89.21,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertEqual(body["plant_name"], "Milpa norte")
+        self.assertEqual(body["plot_id"], "plot-1")
+        mocked.assert_called_once()
+
+    @patch("routes.plants.rename_plant_cycle")
+    def test_plants_rename_updates_plant_name(self, mocked):
+        mocked.return_value = {
+            "crop_cycle_id": "cycle-plant-1",
+            "plant_name": "Milpa sur",
+            "crop_name": "Milpa sur",
+            "crop": "maiz",
+            "sowing_date": "2026-05-20",
+            "lat": 13.69,
+            "lon": -89.21,
+            "status": "active",
+        }
+        response = self.app.patch("/api/plants/cycle-plant-1", json={"plant_name": "Milpa sur"})
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()["data"]
+        self.assertEqual(body["plant_name"], "Milpa sur")
+        mocked.assert_called_once()
+
     @patch("routes.risk.get_risk_assessment")
     def test_risk_assessment_route(self, mocked):
         mocked.return_value = ({"risk_level": "PREVENIR", "confidence": "media"}, {"cached": True}, 200)
@@ -100,6 +278,27 @@ class ManifestRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.get_json()
         self.assertIn("current_datetime", body["data"])
+
+    @patch("routes.llm.generate_chat_reply")
+    def test_llm_chat_route(self, mocked):
+        mocked.return_value = (
+            {"reply": "Tu maiz va bien.", "tool_calls": []},
+            {"cached": False, "stale": False, "upstream_status": "ok", "fetched_at": "2026-05-16T10:30:00-06:00"},
+            200,
+        )
+        response = self.app.post(
+            "/api/llm/chat",
+            json={
+                "message": "como va mi maiz",
+                "crop": "maiz",
+                "sowing_date": "2026-05-10",
+                "lat": 13.8,
+                "lon": -89.18,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["data"]["reply"], "Tu maiz va bien.")
 
     def test_retired_v1_observations_route_returns_404(self):
         response = self.app.get("/api/v1/observations/current")

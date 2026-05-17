@@ -91,3 +91,20 @@ class Config:
     # ── Internal jobs ──────────────────────────────────────────
     CRON_SECRET = os.getenv("CRON_SECRET", "")
 
+    # ── Auth / JWT ─────────────────────────────────────────────
+    AUTH_ENABLED = os.getenv("AUTH_ENABLED", "true").lower() == "true"
+    AUTH_BYPASS_FOR_TESTING = os.getenv("AUTH_BYPASS_FOR_TESTING", "false").lower() == "true"
+    SUPABASE_JWT_ISSUER = os.getenv("SUPABASE_JWT_ISSUER", "")
+    SUPABASE_JWT_AUDIENCE = os.getenv("SUPABASE_JWT_AUDIENCE", "authenticated")
+    SUPABASE_JWKS_TTL = int(os.getenv("SUPABASE_JWKS_TTL", "3600"))
+
+    # ── OpenRouter / LLM ──────────────────────────────────────
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+    OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "")
+    OPENROUTER_FALLBACK_MODELS = os.getenv("OPENROUTER_FALLBACK_MODELS", "openai/gpt-5.4-nano")
+    OPENROUTER_HTTP_REFERER = os.getenv("OPENROUTER_HTTP_REFERER", "")
+    OPENROUTER_TITLE = os.getenv("OPENROUTER_TITLE", "SATO-Agro Backend")
+    OPENROUTER_CATEGORIES = os.getenv("OPENROUTER_CATEGORIES", "backend,agriculture")
+    OPENROUTER_MAX_TOOL_ROUNDS = int(os.getenv("OPENROUTER_MAX_TOOL_ROUNDS", "4"))
+    LLM_SYSTEM_PROMPT_PATH = os.getenv("LLM_SYSTEM_PROMPT_PATH", "")
+

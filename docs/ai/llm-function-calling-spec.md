@@ -2,10 +2,12 @@
 
 This backend exposes a compact tool layer for assistants at:
 
+- `POST /api/llm/chat`
 - `GET /api/v1/ai/tools/manifest`
 - `POST /api/v1/ai/tools/call`
 
-This layer is the preferred compatibility entrypoint for tool-based agents.
+`/api/llm/chat` is the preferred backend-managed LLM entrypoint.
+The `/api/v1/ai/tools/*` layer remains the preferred compatibility entrypoint for external tool-based agents, MCP clients, or custom orchestrators.
 
 ---
 
@@ -15,6 +17,83 @@ This layer is the preferred compatibility entrypoint for tool-based agents.
 - official canícula context should be deterministic
 - frontend, tool-calling agents, and backend logic should share one normalized source of truth
 - assistants should ask for semantic results, not low-level climate fragments
+- the backend should own the tool loop when the product wants one stable chat contract
+
+---
+
+## Backend-managed Chat
+
+Use:
+
+```http
+POST /api/llm/chat
+Content-Type: application/json
+```
+
+Body shape:
+
+```json
+{
+  "message": "como va mi maiz",
+  "model": "openai/gpt-5.4-pro",
+  "crop": "maiz",
+  "sowing_date": "2026-05-10",
+  "lat": 13.8,
+  "lon": -89.1833,
+  "target_date": "2026-05-16",
+  "conversation": [
+    { "role": "user", "content": "sembré el 10 de mayo" },
+    { "role": "assistant", "content": "Entendido." }
+  ]
+}
+```
+
+Notes:
+
+- `message` is required
+- `model` is optional and may be selected by frontend
+- if frontend sends a model, the backend uses it first
+- the backend always keeps `mistralai/mistral-medium-3.1` as fallback through OpenRouter routing
+- the backend injects the current `runtime_context` and runs the semantic tool loop itself
+
+Response shape:
+
+```json
+{
+  "data": {
+    "reply": "Tu maiz va con riesgo preventivo alto...",
+    "runtime_context": {},
+    "tool_calls": [
+      {
+        "tool_name": "getRiskAssessment",
+        "arguments": {},
+        "status": 200,
+        "meta": {}
+      }
+    ],
+    "model": "openai/gpt-5.4-pro",
+    "requested_model": "openai/gpt-5.4-pro",
+    "routing_models": [
+      "openai/gpt-5.4-pro",
+      "mistralai/mistral-medium-3.1"
+    ],
+    "finish_reason": "stop",
+    "openrouter_metadata": {}
+  },
+  "meta": {
+    "cached": false,
+    "stale": false,
+    "upstream_status": "ok",
+    "fetched_at": "2026-05-16T18:39:34.102588+00:00"
+  }
+}
+```
+
+Use cases:
+
+- product chat UI
+- assistant panel inside frontend
+- model switching from UI without rewriting tool orchestration
 
 ---
 
@@ -254,7 +333,14 @@ Use cases:
 
 ## Recommended Orchestration
 
-For an assistant:
+For a backend-managed assistant:
+
+1. call `POST /api/llm/chat`
+2. let the backend decide whether to use `getRiskAssessment`, `getOfficialContext`, `getPhenologyContext`, or `explainRecommendation`
+3. render `data.reply`
+4. optionally log `tool_calls`, `model`, and `routing_models` for debugging
+
+For an external tool-calling assistant:
 
 1. If the user asks about current or future crop risk:
    - call `getRiskAssessment`
@@ -273,6 +359,7 @@ For an assistant:
 
 ## Design Guidance
 
+- use `/api/llm/chat` when the frontend wants one simple conversational contract
 - use tool calls for fresh structured risk and phenology
 - use `/api/v1/documents/latest` separately when you need document discovery for RAG
 - do not rely on embeddings for current numeric climate values or live risk state

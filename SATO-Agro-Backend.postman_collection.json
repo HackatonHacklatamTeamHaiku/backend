@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "SATO-Agro Backend",
-    "description": "Trimmed API collection for the SATO-Agro backend.\n\nPrimary routes live under /api/weather, /api/geo, /api/risk, and /api/llm.\nCompatibility routes are kept only for /api/v1/documents/latest and the 4 semantic AI tools announced by the backend manifest.\n\nBase URL: http://127.0.0.1:5000\n\nTest coordinates: San Salvador (lat=13.69, lon=-89.21)",
+    "description": "Trimmed API collection for the SATO-Agro backend.\n\nPrimary routes live under /api/weather, /api/geo, /api/risk, /api/llm, and /api/auth.\nAll /api/* routes require Authorization: Bearer <supabase_access_token>, except / and /health.\nThe preferred chat contract is POST /api/llm/chat, where frontend may send a model and the backend keeps OpenRouter fallback routing to mistralai/mistral-medium-3.1.\nCompatibility routes are kept for /api/v1/documents/latest and the semantic AI tools announced by the backend manifest.\n\nBase URL: http://127.0.0.1:5000\nTest coordinates: San Salvador (lat=13.69, lon=-89.21)\nTest user: test@example.com / TestPassword123!",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -28,6 +28,30 @@
     {
       "key": "target_date",
       "value": "2026-08-15"
+    },
+    {
+      "key": "model",
+      "value": "mistralai/mistral-medium-3.1"
+    },
+    {
+      "key": "supabaseUrl",
+      "value": "https://<project-ref>.supabase.co"
+    },
+    {
+      "key": "supabasePublishableKey",
+      "value": "<your-anon-key>"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "testUserEmail",
+      "value": "test@example.com"
+    },
+    {
+      "key": "testUserPassword",
+      "value": "TestPassword123!"
     }
   ],
   "item": [
@@ -69,9 +93,109 @@
       ]
     },
     {
+      "name": "Auth",
+      "description": "Supabase login plus backend session bootstrap. Run password login first, copy access_token into {{accessToken}}, then call Backend Me.",
+      "item": [
+        {
+          "name": "Supabase Password Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{supabasePublishableKey}}",
+                "description": "Supabase publishable key"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{supabaseUrl}}/auth/v1/token?grant_type=password",
+              "host": [
+                "{{supabaseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "v1",
+                "token"
+              ],
+              "query": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testUserEmail}}\",\n  \"password\": \"{{testUserPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Login directo contra Supabase Auth. Copia data.access_token de la respuesta en la variable {{accessToken}}."
+          }
+        },
+        {
+          "name": "Backend Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Valida el JWT contra el backend y devuelve claims + profile."
+          }
+        }
+      ]
+    },
+    {
       "name": "Manifest-Aligned (Primary)",
       "description": "Preferred routes for new frontend and AI development.",
       "item": [
+        {
+          "name": "Auth Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Current authenticated user plus linked producer profile."
+          }
+        },
         {
           "name": "Weather Observed",
           "request": {
@@ -99,7 +223,14 @@
                 }
               ]
             },
-            "description": "Current observed weather bundle: temperature (current/max/min), wind, rainfall, nearest stations with distance and confidence."
+            "description": "Current observed weather bundle: temperature (current/max/min), wind, rainfall, nearest stations with distance and confidence.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
+              }
+            ]
           }
         },
         {
@@ -132,7 +263,14 @@
                 }
               ]
             },
-            "description": "Short-range forecast from Open-Meteo: temperature, rain, soil moisture, horizon classification, and warnings."
+            "description": "Short-range forecast from Open-Meteo: temperature, rain, soil moisture, horizon classification, and warnings.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
+              }
+            ]
           }
         },
         {
@@ -165,7 +303,14 @@
                 }
               ]
             },
-            "description": "Territorial context: municipality, municipality_code, soil (organic matter, water retention), seasonal climate outlook from SNET."
+            "description": "Territorial context: municipality, municipality_code, soil (organic matter, water retention), seasonal climate outlook from SNET.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
+              }
+            ]
           }
         },
         {
@@ -208,7 +353,14 @@
                 }
               ]
             },
-            "description": "Explainable crop risk assessment: risk level, score, phenological phase, climate state, canicula watch, recommendations, confidence, and assumptions."
+            "description": "Explainable crop risk assessment: risk level, score, phenological phase, climate state, canicula watch, recommendations, confidence, and assumptions.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
+              }
+            ]
           }
         },
         {
@@ -248,7 +400,14 @@
                 }
               ]
             },
-            "description": "Runtime context bundle for LLM assistants: observed weather, forecast, plant state, official context, risk assessment, and source policy."
+            "description": "Runtime context bundle for LLM assistants: observed weather, forecast, plant state, official context, risk assessment, and source policy.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
+              }
+            ]
           }
         },
         {
@@ -273,8 +432,219 @@
                 }
               ]
             },
-            "description": "Minimal context with only official seasonal snippets (no crop/location required)."
+            "description": "Minimal context with only official seasonal snippets (no crop/location required).",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
+              }
+            ]
           }
+        },
+        {
+          "name": "LLM Chat",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/llm/chat",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "llm",
+                "chat"
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"como va mi maiz\",\n  \"model\": \"{{model}}\",\n  \"crop\": \"{{crop}}\",\n  \"sowing_date\": \"{{sowing_date}}\",\n  \"lat\": {{lat}},\n  \"lon\": {{lon}},\n  \"target_date\": \"{{target_date}}\",\n  \"conversation\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"sembré en mayo\"\n    }\n  ]\n}"
+            },
+            "description": "Preferred backend-managed chat contract. Frontend may send a model, the backend injects runtime_context, runs the semantic tool loop, and keeps fallback routing to mistralai/mistral-medium-3.1."
+          }
+        },
+        {
+          "name": "LLM Chat QA",
+          "description": "Suggested manual QA set for the backend-managed assistant. Check data.reply, data.tool_calls, data.model, and whether the answer stays short, natural, and honest about forecast vs scenario.",
+          "item": [
+            {
+              "name": "QA - Estado Actual",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/api/llm/chat",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "llm",
+                    "chat"
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "description": "Supabase access token"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"como va mi maiz\",\n  \"model\": \"{{model}}\",\n  \"crop\": \"{{crop}}\",\n  \"sowing_date\": \"{{sowing_date}}\",\n  \"lat\": {{lat}},\n  \"lon\": {{lon}},\n  \"target_date\": \"{{target_date}}\"\n}"
+                },
+                "description": "Expected behavior: should usually call getRiskAssessment and answer with a short producer-friendly summary."
+              }
+            },
+            {
+              "name": "QA - Fertilización",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/api/llm/chat",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "llm",
+                    "chat"
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "description": "Supabase access token"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"le echo abono?\",\n  \"model\": \"{{model}}\",\n  \"crop\": \"{{crop}}\",\n  \"sowing_date\": \"{{sowing_date}}\",\n  \"lat\": {{lat}},\n  \"lon\": {{lon}},\n  \"target_date\": \"{{target_date}}\"\n}"
+                },
+                "description": "Expected behavior: if the context is dry or risky, answer should advise against fertilizing in dry conditions."
+              }
+            },
+            {
+              "name": "QA - En 7 Días",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/api/llm/chat",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "llm",
+                    "chat"
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "description": "Supabase access token"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"y en 7 dias?\",\n  \"model\": \"{{model}}\",\n  \"crop\": \"{{crop}}\",\n  \"sowing_date\": \"{{sowing_date}}\",\n  \"lat\": {{lat}},\n  \"lon\": {{lon}},\n  \"target_date\": \"2026-05-23\"\n}"
+                },
+                "description": "Expected behavior: should treat this as pronóstico, not certainty. Tool calling should usually include getRiskAssessment."
+              }
+            },
+            {
+              "name": "QA - En 30 Días",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/api/llm/chat",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "llm",
+                    "chat"
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "description": "Supabase access token"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"y en 30 dias?\",\n  \"model\": \"{{model}}\",\n  \"crop\": \"{{crop}}\",\n  \"sowing_date\": \"{{sowing_date}}\",\n  \"lat\": {{lat}},\n  \"lon\": {{lon}},\n  \"target_date\": \"2026-06-15\"\n}"
+                },
+                "description": "Expected behavior: should explicitly frame this as escenario, not precise forecast."
+              }
+            },
+            {
+              "name": "QA - Explícamelo Simple",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/api/llm/chat",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "llm",
+                    "chat"
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "description": "Supabase access token"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"explicamelo simple\",\n  \"model\": \"{{model}}\",\n  \"crop\": \"{{crop}}\",\n  \"sowing_date\": \"{{sowing_date}}\",\n  \"lat\": {{lat}},\n  \"lon\": {{lon}},\n  \"target_date\": \"{{target_date}}\",\n  \"conversation\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"como va mi maiz\"\n    }\n  ]\n}"
+                },
+                "description": "Expected behavior: short, natural reformulation for producer, often without needing another fresh tool call."
+              }
+            }
+          ]
         },
         {
           "name": "LLM Explain",
@@ -295,6 +665,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
               }
             ],
             "body": {
@@ -308,7 +683,7 @@
     },
     {
       "name": "Compatibility",
-      "description": "Kept only for document discovery and the 4 semantic AI tool integrations announced by the backend manifest.",
+      "description": "Kept only for document discovery and the 4 semantic AI tool integrations announced by the backend manifest. Use this folder for MCP or external tool-calling agents, not for the main product chat.",
       "item": [
         {
           "name": "V1 Latest Documents",
@@ -326,7 +701,14 @@
                 "latest"
               ]
             },
-            "description": "Returns all 3 latest documents (48h forecast, weekly PDF, agro bulletin) with IDs, types, URLs, and issue dates."
+            "description": "Returns all 3 latest documents (48h forecast, weekly PDF, agro bulletin) with IDs, types, URLs, and issue dates.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
+              }
+            ]
           }
         },
         {
@@ -346,7 +728,14 @@
                 "manifest"
               ]
             },
-            "description": "Returns the function-calling manifest with the 4 semantic tools currently announced by the backend."
+            "description": "Returns the function-calling manifest with the 4 semantic tools currently announced by the backend.",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
+              }
+            ]
           }
         },
         {
@@ -370,6 +759,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
               }
             ],
             "body": {
@@ -400,6 +794,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
               }
             ],
             "body": {
@@ -430,6 +829,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
               }
             ],
             "body": {
@@ -460,6 +864,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
               }
             ],
             "body": {
@@ -490,6 +899,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Supabase access token"
               }
             ],
             "body": {

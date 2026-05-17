@@ -181,6 +181,46 @@ Use cases:
 
 ---
 
+### `POST /api/llm/chat`
+
+Backend-managed conversational entrypoint backed by OpenRouter.
+
+Accepts fields like:
+
+- `message`
+- `model`
+- `crop`
+- `sowing_date`
+- `lat`
+- `lon`
+- `target_date`
+- `conversation`
+
+Returns fields like:
+
+- `reply`
+- `runtime_context`
+- `tool_calls`
+- `model`
+- `requested_model`
+- `routing_models`
+- `finish_reason`
+- `openrouter_metadata`
+
+Use cases:
+
+- product chat UI
+- model selection from frontend
+- one-call backend-managed tool orchestration
+
+Important:
+
+- if frontend supplies `model`, backend routes to that model first
+- backend keeps `mistralai/mistral-medium-3.1` as fallback
+- this route is preferred when the app wants a simple chat contract instead of external tool orchestration
+
+---
+
 ### `POST /api/llm/explain`
 
 Narrative explanation endpoint.
@@ -266,6 +306,7 @@ Prefer:
 - `/api/weather/forecast`
 - `/api/geo/context`
 - `/api/risk/assessment`
+- `/api/llm/chat`
 - `/api/llm/explain`
 
 Why:
@@ -286,6 +327,10 @@ Use:
 - `/api/llm/context` when the app wants to pre-compose runtime context itself
 - `buildRuntimeContext` through `/api/v1/ai/tools/call` when a tool-calling assistant needs the same backend-composed runtime context
 
+Avoid:
+
+- rebuilding the same tool loop in frontend if `/api/llm/chat` already fits the product flow
+
 ### RAG
 
 Use:
@@ -305,6 +350,7 @@ Then:
 
 - keep upstream SNET and Open-Meteo payloads behind the backend
 - keep frontend on the manifest-aligned public surface
+- keep product chat on `/api/llm/chat` unless an external agent truly needs raw tools
 - keep tool-calling assistants on the semantic tool layer
 - treat `gt_16_days` as scenario, not precise forecast
 - treat modeled soil moisture as context, not direct field measurement

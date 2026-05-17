@@ -18,6 +18,7 @@ from flask import Flask
 from flask_cors import CORS
 
 from config import Config
+from services.auth import require_api_auth
 
 
 def create_app() -> Flask:
@@ -27,6 +28,7 @@ def create_app() -> Flask:
 
     # Enable CORS so the frontend can call the API from any origin
     CORS(app)
+    app.before_request(require_api_auth)
 
     # ── Database (Supabase PostgreSQL) ────────────────────────
     from services.database import init_pool, close_pool
@@ -47,6 +49,7 @@ def create_app() -> Flask:
 
     # ── Register blueprints ──────────────────────────────────
     from routes.health import bp as health_bp
+    from routes.auth import bp as auth_bp
     from routes.canonical import bp as canonical_bp
     from routes.ai_tools import bp as ai_tools_bp
     from routes.weather import bp as weather_bp
@@ -54,8 +57,13 @@ def create_app() -> Flask:
     from routes.risk import bp as risk_bp
     from routes.llm import bp as llm_bp
     from routes.internal_jobs import bp as internal_jobs_bp
+    from routes.onboarding import bp as onboarding_bp
+    from routes.profile import bp as profile_bp
+    from routes.crops import bp as crops_bp
+    from routes.plants import bp as plants_bp
 
     app.register_blueprint(health_bp)
+    app.register_blueprint(auth_bp)
     app.register_blueprint(canonical_bp)
     app.register_blueprint(ai_tools_bp)
     app.register_blueprint(weather_bp)
@@ -63,6 +71,10 @@ def create_app() -> Flask:
     app.register_blueprint(risk_bp)
     app.register_blueprint(llm_bp)
     app.register_blueprint(internal_jobs_bp)
+    app.register_blueprint(onboarding_bp)
+    app.register_blueprint(profile_bp)
+    app.register_blueprint(crops_bp)
+    app.register_blueprint(plants_bp)
 
     # ── Root redirect ────────────────────────────────────────
     @app.route("/")
@@ -76,9 +88,15 @@ def create_app() -> Flask:
                 "/api/weather/forecast?lat=&lon=&target_date=",
                 "/api/geo/context?lat=&lon=",
                 "/api/risk/assessment?crop=&sowing_date=&lat=&lon=",
+                "/api/auth/me",
+                "/api/profile",
+                "/api/plants",
+                "/api/crops",
+                "/api/onboarding/parcel",
                 "/api/llm/context",
                 "/api/llm/explain",
                 "/api/internal/jobs/daily-risk-alerts",
+                "/api/llm/chat",
                 "/api/v1/documents/latest",
                 "/api/v1/ai/tools/manifest",
                 "/api/v1/ai/tools/call",

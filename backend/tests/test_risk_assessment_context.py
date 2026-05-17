@@ -31,6 +31,71 @@ def make_open_meteo_raw(start_date, days=17):
 
 
 class RiskAssessmentContextTests(unittest.TestCase):
+    def test_weather_observed_falls_back_to_open_meteo_for_missing_snet_fields(self):
+        now = datetime.now(EL_SALVADOR_TZ)
+        today = now.date()
+        raw = make_open_meteo_raw(today)
+        raw["hourly"] = {
+            "time": [now.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M")],
+            "temperature_2m": [28.4],
+            "relative_humidity_2m": [74],
+            "wind_speed_10m": [7.2],
+            "wind_direction_10m": [135],
+            "precipitation": [0.0],
+        }
+
+        with patch.object(manifest_context, "_get_observations") as observations, \
+            patch.object(manifest_context, "_get_rainfall") as rainfall, \
+            patch.object(manifest_context, "_get_forecast") as forecast:
+            observations.return_value = (
+                [
+                    {
+                        "station_id": 61,
+                        "station_name": "UES",
+                        "lat": 13.69,
+                        "lon": -89.21,
+                        "temperature": {"current_c": None, "max_c": None, "min_c": None},
+                        "wind": {"speed": None, "direction_deg": None},
+                        "observed_at_local": None,
+                        "sources_used": ["snet_temperatura_actual_max_min"],
+                    }
+                ],
+                False,
+                "2026-05-17T00:00:00Z",
+            )
+            rainfall.return_value = (
+                [
+                    {
+                        "station_id": 264,
+                        "station_name": "Zoologico",
+                        "lat": 13.69,
+                        "lon": -89.21,
+                        "rain_mm_period": None,
+                        "is_raining": None,
+                        "obs_time_latest_local": None,
+                    }
+                ],
+                False,
+                "2026-05-17T00:00:00Z",
+            )
+            forecast.return_value = (raw, False, "2026-05-17T00:00:00Z")
+
+            data, meta = manifest_context.get_weather_observed(13.69, -89.21)
+
+        self.assertEqual(data["temperature_current_c"], 28.4)
+        self.assertEqual(data["temperature_max_c"], 31.0)
+        self.assertEqual(data["temperature_min_c"], 22.0)
+        self.assertEqual(data["rain_recent_mm"], 0.2)
+        self.assertEqual(data["humidity_relative_percent"], 74.0)
+        self.assertEqual(data["wind_speed_kmh"], 7.2)
+        self.assertEqual(data["wind_direction_deg"], 135.0)
+        self.assertEqual(data["field_sources"]["temperature_current_c"], "open_meteo_forecast")
+        self.assertEqual(data["field_sources"]["rain_recent_mm"], "open_meteo_forecast")
+        self.assertEqual(data["field_sources"]["humidity_relative_percent"], "open_meteo_forecast")
+        self.assertEqual(data["field_sources"]["wind_direction_deg"], "open_meteo_forecast")
+        self.assertIn("open_meteo_forecast", data["fallback_sources"])
+        self.assertEqual(meta["upstream_status"], "degraded")
+
     def test_forecast_window_summary_uses_tomorrow_to_target(self):
         today = datetime.now(EL_SALVADOR_TZ).date()
         raw = make_open_meteo_raw(today)

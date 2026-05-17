@@ -82,3 +82,9 @@ class Config:
     DATABASE_URL = os.getenv("DATABASE_URL", "")
     SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 
+    # ── Zavu notifications ────────────────────────────────────
+    ZAVUDEV_API_KEY = os.getenv("ZAVUDEV_API_KEY", "")
+    ZAVU_DEFAULT_CHANNEL = os.getenv("ZAVU_DEFAULT_CHANNEL", "whatsapp")
+    ZAVU_SENDER_ID = os.getenv("ZAVU_SENDER_ID", "")
+    ZAVU_WHATSAPP_TEMPLATE_ID = os.getenv("ZAVU_WHATSAPP_TEMPLATE_ID", "")
+

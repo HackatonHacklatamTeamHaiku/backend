@@ -412,6 +412,80 @@ No asumas que existe un campo top-level llamado `phenology`; el backend usa `pla
 
 ---
 
+## 6.1. Persistencia MVP de usuario
+
+Para el MVP, el frontend solo debe guardar los datos mínimos que el motor de riesgo ya usa:
+
+| Campo | Tipo | Requerido | Uso |
+|---|---:|---:|---|
+| `crop` | enum | sí | `maiz` o `frijol` |
+| `sowing_date` | string `YYYY-MM-DD` | sí | fase estimada |
+| `lat` | number | sí | clima, zona y riesgo |
+| `lon` | number | sí | clima, zona y riesgo |
+
+El backend persiste esos datos en una entidad simple de cultivos del usuario. No pedir finca, parcela, área, variedad ni temporada en este MVP.
+
+Payload de creación/edición de cultivo:
+
+```json
+{
+  "crop": "maiz",
+  "sowing_date": "2026-05-20",
+  "lat": 13.69,
+  "lon": -89.21
+}
+```
+
+Shape esperado al listar cultivos del usuario:
+
+```json
+{
+  "id": "uuid",
+  "crop": "maiz",
+  "sowing_date": "2026-05-20",
+  "lat": 13.69,
+  "lon": -89.21,
+  "status": "active",
+  "created_at": "2026-05-17T08:00:00Z",
+  "updated_at": "2026-05-17T08:00:00Z"
+}
+```
+
+Valores de `status`:
+
+- `active`: cultivo vigente para dashboard y alertas
+- `archived`: cultivo oculto de alertas y vista principal
+
+Para WhatsApp, el perfil usa:
+
+```json
+{
+  "whatsapp_phone": "+50361478494"
+}
+```
+
+Guardar teléfonos en formato E.164 (`+503...`). Si `whatsapp_phone` está vacío, no se puede enviar alerta por WhatsApp.
+
+Preferencias mínimas de notificación:
+
+```json
+{
+  "alert_whatsapp_enabled": true,
+  "notification_time": "08:00",
+  "notification_timezone": "America/El_Salvador"
+}
+```
+
+Uso frontend:
+
+- onboarding: pedir cultivo, fecha de siembra y ubicación
+- perfil: pedir o confirmar `whatsapp_phone`
+- preferencias: permitir cambiar `notification_time` si se desea
+- dashboard: usar el cultivo activo para llamar `/api/risk/assessment`
+- alertas: solo se evalúan cultivos `active`
+
+---
+
 ## 7. Contexto LLM
 
 ```http

@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "skills": {
+    "ai-agent": {
+      "source": "zavudev/zavu-skills",
+      "sourceType": "github",
+      "skillPath": "skills/ai-agent/SKILL.md",
+      "computedHash": "cbf67bd886ed4db05b2571ac652d39bff9c1fa7f99f0ca5e576fdbfc4c370a5a"
+    },
+    "broadcast-campaign": {
+      "source": "zavudev/zavu-skills",
+      "sourceType": "github",
+      "skillPath": "skills/broadcast-campaign/SKILL.md",
+      "computedHash": "d96b43247a8739f784cf529fbeafc6cb166d8e991bc2be3b9b8d3cbeb65b7821"
+    },
+    "contacts-management": {
+      "source": "zavudev/zavu-skills",
+      "sourceType": "github",
+      "skillPath": "skills/contacts-management/SKILL.md",
+      "computedHash": "560aef01f631cde933e0095096faa61d7439c6a6f40f64cfb4e9ecdda80811d2"
+    },
+    "functions": {
+      "source": "zavudev/zavu-skills",
+      "sourceType": "github",
+      "skillPath": "skills/functions/SKILL.md",
+      "computedHash": "e46483a50eabc558ce45178e288b130756bdac7cace979f4f030326a6f5765d1"
+    },
+    "phone-numbers": {
+      "source": "zavudev/zavu-skills",
+      "sourceType": "github",
+      "skillPath": "skills/phone-numbers/SKILL.md",
+      "computedHash": "2c076f52c5edc2bb305dae2fcf240242fe0165fc4ab82ca494ebaa70716b21f0"
+    },
+    "send-message": {
+      "source": "zavudev/zavu-skills",
+      "sourceType": "github",
+      "skillPath": "skills/send-message/SKILL.md",
+      "computedHash": "34e14510e18cdbef74692f748f6de2b7491a4a166587bda3d2b6cc7517d60f40"
+    },
+    "webhook-setup": {
+      "source": "zavudev/zavu-skills",
+      "sourceType": "github",
+      "skillPath": "skills/webhook-setup/SKILL.md",
+      "computedHash": "69c8765f6661095d9539a5afffc14f7f880e5f8679fca540a2bae068d473683d"
+    },
+    "whatsapp-templates": {
+      "source": "zavudev/zavu-skills",
+      "sourceType": "github",
+      "skillPath": "skills/whatsapp-templates/SKILL.md",
+      "computedHash": "f4fbd403f156ed6cf4564bf2f5d8ad64da63d515666211b3a0179e956ee8c974"
+    },
+    "zavu-rules": {
+      "source": "zavudev/zavu-skills",
+      "sourceType": "github",
+      "skillPath": "skills/zavu-rules/SKILL.md",
+      "computedHash": "2de65255588da291e6273d346c4cfe484e3f1d361826d5db7b9064ca56edad69"
+    }
+  }
+}

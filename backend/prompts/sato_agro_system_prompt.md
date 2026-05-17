@@ -46,6 +46,7 @@ Debes coordinar siempre tres fechas:
 - `sowing_date`: fecha de siembra. Sirve para calcular edad del cultivo y fase estimada.
 - `current_datetime`: fecha/hora actual. Define "hoy", frescura de datos y horizonte.
 - `target_date`: fecha consultada por el usuario, slider o UI. Sirve para explicar fase/riesgo de esa fecha respecto a la fecha actual. Si calculamos para el presente entonces current_date=target_date.
+- `crop_calendar.csv`: calendario fenologico expandido desde la siembra. Cuando exista, usalo como fuente primaria para fechas, dias desde siembra, dias desde presente, inicios y fines de fases. No recalcules manualmente esos valores si el calendario ya contiene la fila.
 
 Diferencia siempre el tipo temporal de la informacion:
 
@@ -64,6 +65,7 @@ Regla critica para edad/fase:
 - Para una fecha futura o del slider, usa `target_plant_state.days_after_sowing` y di "para esa fecha" o "el [target_date] tendria X dias".
 - No mezcles `plant_state`/`target_plant_state` con "hoy" si `temporal_context.is_selected_target_today` es false.
 - Si `current_plant_state.days_after_sowing` y `target_plant_state.days_after_sowing` son distintos, explica la diferencia brevemente.
+- Si `crop_calendar` existe, usa la fila marcada como "Presente" para explicar el estado actual de la planta en esta conversacion.
 
 ## 3. Conocimiento fenologico estable
 

@@ -178,6 +178,28 @@ SUSCEPTIBILITY = {
     },
 }
 
+PHENOLOGY_PHASES = {
+    "maiz": [
+        {"code": "VE", "start": 0, "end": 7, "sensitivity": "Alta"},
+        {"code": "V1_V6", "start": 8, "end": 35, "sensitivity": "Media"},
+        {"code": "V7_VT", "start": 36, "end": 60, "sensitivity": "Alta"},
+        {"code": "VT_R1", "start": 61, "end": 80, "sensitivity": "Critica"},
+        {"code": "R2_R4", "start": 76, "end": 95, "sensitivity": "Alta"},
+        {"code": "R5_R6", "start": 96, "end": 120, "sensitivity": "Media-baja"},
+        {"code": "DONE", "start": 121, "end": None, "sensitivity": "Baja"},
+    ],
+    "frijol": [
+        {"code": "V0_V1", "start": 0, "end": 7, "sensitivity": "Alta"},
+        {"code": "V2_V4", "start": 8, "end": 30, "sensitivity": "Media"},
+        {"code": "R5", "start": 31, "end": 34, "sensitivity": "Alta"},
+        {"code": "R6", "start": 35, "end": 50, "sensitivity": "Critica"},
+        {"code": "R7", "start": 41, "end": 55, "sensitivity": "Critica"},
+        {"code": "R8", "start": 56, "end": 65, "sensitivity": "Alta"},
+        {"code": "R9", "start": 66, "end": 75, "sensitivity": "Media-baja"},
+        {"code": "DONE", "start": 76, "end": None, "sensitivity": "Baja"},
+    ],
+}
+
 FACTOR_META = {
     "water_deficit": (
         "Deficit hidrico",
@@ -294,40 +316,15 @@ def default_days_window(horizon: str) -> int:
 
 
 def phase_for(crop: str, days: int) -> tuple[str, dict]:
-    if crop == "maiz":
-        if days <= 7:
-            code = "VE"
-        elif days <= 35:
-            code = "V1_V6"
-        elif days <= 60:
-            code = "V7_VT"
-        elif days <= 80:
-            code = "VT_R1"
-        elif days <= 95:
-            code = "R2_R4"
-        elif days <= 120:
-            code = "R5_R6"
-        else:
-            code = "DONE"
-    elif crop == "frijol":
-        if days <= 7:
-            code = "V0_V1"
-        elif days <= 30:
-            code = "V2_V4"
-        elif days <= 34:
-            code = "R5"
-        elif days <= 40:
-            code = "R6"
-        elif days <= 55:
-            code = "R7"
-        elif days <= 65:
-            code = "R8"
-        elif days <= 75:
-            code = "R9"
-        else:
-            code = "DONE"
-    else:
+    phases = PHENOLOGY_PHASES.get(crop)
+    if not phases:
         raise ValueError(f"Unsupported crop: {crop}")
+
+    code = phases[-1]["code"]
+    for phase in phases:
+        end = phase["end"] if phase["end"] is not None else float("inf")
+        if phase["start"] <= days <= end:
+            code = phase["code"]
     return code, SUSCEPTIBILITY[crop][code]
 
 

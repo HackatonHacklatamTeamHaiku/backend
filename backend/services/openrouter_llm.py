@@ -33,7 +33,7 @@ def _trace_payload(value):
     process_inputs=_trace_payload,
     process_outputs=_trace_payload,
 )
-def generate_chat_reply(arguments: dict) -> tuple[dict, dict, int]:
+def generate_chat_reply(arguments: dict, langsmith_extra: dict | None = None) -> tuple[dict, dict, int]:
     user_message = arguments.get("message")
     if not isinstance(user_message, str) or not user_message.strip():
         return _error("message must be a non-empty string")
@@ -52,6 +52,7 @@ def generate_chat_reply(arguments: dict) -> tuple[dict, dict, int]:
         "lat": arguments.get("lat"),
         "lon": arguments.get("lon"),
         "target_date": arguments.get("target_date"),
+        "conversation_started_date": arguments.get("conversation_started_date"),
     }
     runtime_context, runtime_meta, runtime_status = build_runtime_llm_context(runtime_args)
     if runtime_status >= 400:
@@ -263,8 +264,7 @@ def _build_messages(system_prompt: str, runtime_context: dict, conversation: lis
         {"role": "system", "content": system_prompt},
         {
             "role": "system",
-            "content": "Este es el runtime_context actual del usuario. Usalo como fuente principal.\n"
-            + json.dumps(runtime_context, ensure_ascii=False),
+            "content": _format_runtime_context_for_prompt(runtime_context),
         },
     ]
     for item in conversation:
@@ -276,6 +276,41 @@ def _build_messages(system_prompt: str, runtime_context: dict, conversation: lis
             messages.append({"role": role, "content": content.strip()})
     messages.append({"role": "user", "content": user_message})
     return messages
+
+
+def _format_runtime_context_for_prompt(runtime_context: dict) -> str:
+    context_for_json = dict(runtime_context)
+    crop_calendar = context_for_json.get("crop_calendar")
+    calendar_csv = None
+    if isinstance(crop_calendar, dict):
+        calendar_csv = crop_calendar.get("csv")
+        if isinstance(calendar_csv, str):
+            context_for_json["crop_calendar"] = {
+                key: value
+                for key, value in crop_calendar.items()
+                if key != "csv"
+            }
+
+    parts = [
+        "Este es el runtime_context actual del usuario. Usalo como fuente principal.",
+        "",
+        "## Datos estructurados",
+        "```json",
+        json.dumps(context_for_json, ensure_ascii=False, indent=2),
+        "```",
+    ]
+    if calendar_csv:
+        parts.extend(
+            [
+                "",
+                "## crop_calendar.csv",
+                "Usa este CSV como fuente primaria para fechas, dias desde siembra, dias desde presente e hitos de fase.",
+                "```csv",
+                calendar_csv,
+                "```",
+            ]
+        )
+    return "\n".join(parts)
 
 
 def _first_choice(response) -> dict:

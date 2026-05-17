@@ -4,7 +4,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from services.openrouter_llm import generate_chat_reply
+from services.openrouter_llm import _build_messages, generate_chat_reply
 
 
 class _DummyResponse:
@@ -31,6 +31,26 @@ class _DummyClient:
 
 
 class OpenRouterLLMTests(unittest.TestCase):
+    def test_runtime_context_prompt_formats_calendar_as_markdown_csv(self):
+        runtime_context = {
+            "current_date": "2026-05-17",
+            "crop_calendar": {
+                "crop": "maiz",
+                "format": "csv",
+                "csv": "Día,Días desde Siembra,Días desde presente,Evento\nV 01/05/26,0,-16,Siembra\nD 17/05/26,16,0,Presente",
+            },
+        }
+
+        messages = _build_messages("system prompt", runtime_context, [], "hola")
+        content = messages[1]["content"]
+
+        self.assertIn("## Datos estructurados", content)
+        self.assertIn("## crop_calendar.csv", content)
+        self.assertIn("```csv\nDía,Días desde Siembra,Días desde presente,Evento", content)
+        self.assertIn("D 17/05/26,16,0,Presente", content)
+        self.assertNotIn('"csv":', content)
+        self.assertNotIn("\\nD 17/05/26", content)
+
     def test_generate_chat_reply_runs_tool_loop_and_returns_final_text(self):
         runtime_context = {
             "current_datetime": "2026-05-16T10:30:00-06:00",

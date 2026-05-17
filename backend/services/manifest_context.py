@@ -6,14 +6,16 @@ from __future__ import annotations
 
 import math
 import re
+from csv import writer
 from datetime import date, datetime, timedelta
+from io import StringIO
 
 from config import Config
 from normalizers.basins import basin_for_point, normalize_basins
 from normalizers.climate_outlook import normalize_outlook_feature
 from normalizers.municipalities import normalize_municipality_feature
 from normalizers.rainfall import normalize_rainfall
-from normalizers.risk import build_assessment, default_days_window, infer_horizon, phase_for
+from normalizers.risk import PHENOLOGY_PHASES, SUSCEPTIBILITY, build_assessment, default_days_window, infer_horizon, phase_for
 from normalizers.soil import normalize_soil_features
 from routes.canonical import _build_meta, _get_observations
 from services import (
@@ -51,6 +53,8 @@ OUTLOOK_LAYER_BY_MONTH = {
     10: (14, "octubre"),
     11: (15, "noviembre"),
 }
+
+WEEKDAY_LABELS_ES = ["L", "M", "X", "J", "V", "S", "D"]
 
 
 def _distance_confidence(distance_km: float) -> str:
@@ -95,6 +99,77 @@ def _validate_supported_location(lat: float, lon: float) -> None:
         and EL_SALVADOR_BOUNDS["lon_min"] <= lon <= EL_SALVADOR_BOUNDS["lon_max"]
     ):
         raise ValueError("lat and lon must be within the supported El Salvador region")
+
+
+def _format_calendar_day(value: date) -> str:
+    return f"{WEEKDAY_LABELS_ES[value.weekday()]} {value.strftime('%d/%m/%y')}"
+
+
+def _phenology_calendar_rules(crop: str) -> list[dict]:
+    phases = PHENOLOGY_PHASES.get(crop)
+    if not phases:
+        return []
+    return [
+        {
+            "days_from_sowing": f"{phase['start']}-{phase['end']}" if phase["end"] is not None else f">{phase['start'] - 1}",
+            "phase_ui": SUSCEPTIBILITY[crop][phase["code"]]["phase"],
+            "code": phase["code"],
+            "sensitivity": phase["sensitivity"],
+        }
+        for phase in phases
+    ]
+
+
+def _build_crop_calendar(crop: str, sowing_date: date, present_date: date) -> dict | None:
+    phases = PHENOLOGY_PHASES.get(crop)
+    if not phases:
+        return None
+
+    present_days_after_sowing = (present_date - sowing_date).days
+    min_day = min(0, present_days_after_sowing)
+    cycle_end_day = max(phase["start"] for phase in phases if phase["end"] is None)
+    max_day = max(cycle_end_day, present_days_after_sowing)
+    rows = StringIO()
+    csv_writer = writer(rows, lineterminator="\n")
+    csv_writer.writerow(["Día", "Días desde Siembra", "Días desde presente", "Evento"])
+
+    for day_offset in range(min_day, max_day + 1):
+        current_day = sowing_date + timedelta(days=day_offset)
+        events = []
+        if day_offset == 0:
+            events.append("Siembra")
+        for phase in phases:
+            phase_name = SUSCEPTIBILITY[crop][phase["code"]]["phase"]
+            if day_offset == phase["start"]:
+                events.append(f"Inicio {phase_name}, Sensibilidad {phase['sensitivity']}")
+            if phase["end"] is not None and day_offset == phase["end"]:
+                events.append(f"Fin {phase_name}")
+        if day_offset == present_days_after_sowing:
+            events.append("Presente")
+
+        csv_writer.writerow(
+            [
+                _format_calendar_day(current_day),
+                day_offset,
+                day_offset - present_days_after_sowing,
+                ", ".join(events),
+            ]
+        )
+
+    return {
+        "crop": crop,
+        "format": "csv",
+        "timezone": "America/El_Salvador",
+        "sowing_date": sowing_date.isoformat(),
+        "present_date": present_date.isoformat(),
+        "present_days_after_sowing": present_days_after_sowing,
+        "source": "sato_agro_phenology_calendar_v1",
+        "usage_rule": (
+            "Use crop_calendar.csv as the primary source for dates, days after sowing, "
+            "days from present, phase starts and phase ends. Do not recalculate these values manually."
+        ),
+        "csv": rows.getvalue().rstrip("\n"),
+    }
 
 
 def _data_quality_confidence(assumptions: list[str], warnings: list[str]) -> tuple[str, list[str]]:
@@ -1057,6 +1132,7 @@ def build_runtime_llm_context(arguments: dict) -> tuple[dict, dict, int]:
     lat = arguments.get("lat")
     lon = arguments.get("lon")
     target_date = arguments.get("target_date")
+    conversation_started_date = arguments.get("conversation_started_date")
 
     if not crop and not sowing_date and lat is None and lon is None and target_date:
         selected_target_date = _parse_request_date(target_date, "target_date")
@@ -1109,12 +1185,19 @@ def build_runtime_llm_context(arguments: dict) -> tuple[dict, dict, int]:
     if status != 200:
         return risk, meta, status
 
-    current_date = datetime.now(EL_SALVADOR_TZ).date()
-    selected_target_date = target_date or current_date.isoformat()
+    system_current_date = datetime.now(EL_SALVADOR_TZ).date()
+    present_date = (
+        _parse_request_date(conversation_started_date, "conversation_started_date")
+        if conversation_started_date
+        else system_current_date
+    )
+    selected_target_date = target_date or present_date.isoformat()
     selected_target = _parse_request_date(selected_target_date, "target_date")
     parsed_sowing = _parse_request_date(sowing_date, "sowing_date")
     current_datetime = datetime.now(EL_SALVADOR_TZ).isoformat()
-    current_plant_state = _plant_state_for_date(crop, parsed_sowing, current_date, "current_date")
+    current_plant_state = _plant_state_for_date(crop, parsed_sowing, present_date, "conversation_started_date")
+    crop_calendar = _build_crop_calendar(crop, parsed_sowing, present_date)
+    phenology_calendar_rules = _phenology_calendar_rules(crop)
     target_plant_state = {
         **risk["plant_state"],
         "target_date": risk["target_date"],
@@ -1123,7 +1206,7 @@ def build_runtime_llm_context(arguments: dict) -> tuple[dict, dict, int]:
     }
     context = {
         "current_datetime": current_datetime,
-        "current_date": current_date.isoformat(),
+        "current_date": present_date.isoformat(),
         "timezone": "America/El_Salvador",
         "user_inputs": {
             "crop": crop,
@@ -1137,17 +1220,27 @@ def build_runtime_llm_context(arguments: dict) -> tuple[dict, dict, int]:
             "visible_panel": arguments.get("visible_panel", "risk_summary"),
         },
         "temporal_context": {
-            "current_date": current_date.isoformat(),
+            "current_date": present_date.isoformat(),
+            "system_current_date": system_current_date.isoformat(),
+            "conversation_started_date": present_date.isoformat(),
             "selected_target_date": selected_target_date,
-            "is_selected_target_today": selected_target == current_date,
+            "is_selected_target_today": selected_target == present_date,
             "sowing_date": parsed_sowing.isoformat(),
             "current_days_after_sowing": current_plant_state["days_after_sowing"],
             "target_days_after_sowing": target_plant_state["days_after_sowing"],
             "usage_rule": (
-                "Use current_plant_state when saying hoy/current. "
+                "Use current_plant_state when saying hoy/current/presente; it is frozen to conversation_started_date. "
                 "Use target_plant_state only when explicitly discussing ui_state.selected_target_date."
             ),
         },
+        "calendar_reference": {
+            "sowing_date": parsed_sowing.isoformat(),
+            "conversation_started_date": present_date.isoformat(),
+            "present_days_after_sowing": current_plant_state["days_after_sowing"],
+            "rule": "El estado actual de la planta se calcula usando conversation_started_date - sowing_date.",
+        },
+        "crop_calendar": crop_calendar,
+        "phenology_calendar_rules": phenology_calendar_rules,
         "missing_required_user_data": [],
         "current_plant_state": current_plant_state,
         "target_plant_state": target_plant_state,

@@ -416,6 +416,71 @@ class RiskAssessmentContextTests(unittest.TestCase):
         self.assertEqual(context["plant_state"]["days_after_sowing"], 14)
         self.assertIn("Use current_plant_state", context["temporal_context"]["usage_rule"])
 
+    def test_llm_runtime_context_includes_dynamic_crop_calendar_for_supported_crops(self):
+        risk_payload = {
+            "target_date": "2026-05-24",
+            "horizon": "4_7_days",
+            "risk_score": 0.42,
+            "risk_level_base": "NORMAL",
+            "risk_level": "NORMAL",
+            "confidence": "alta",
+            "horizon_confidence": "alta",
+            "data_quality_confidence": "alta",
+            "confidence_reasons": [],
+            "plant_state": {
+                "days_after_sowing": 14,
+                "phase": "Vegetativo",
+                "phase_code": "V2_V4",
+            },
+            "climate_state": {},
+            "risk_factors": [],
+            "risk_overrides": [],
+            "secondary_alerts": [],
+            "risk_window_weather": {},
+            "observed_weather": {},
+            "forecast_weather": {},
+            "source_roles": {},
+            "derived_inputs": [],
+            "assumptions": [],
+            "input_warnings": [],
+            "recommendations": [],
+            "official_context": {},
+            "sources_used": [],
+        }
+
+        cases = [
+            ("maiz", "Inicio Llenado de grano"),
+            ("frijol", "Inicio Formacion de vainas"),
+        ]
+        for crop, expected_phase_event in cases:
+            with self.subTest(crop=crop), patch.object(
+                manifest_context,
+                "get_risk_assessment",
+                return_value=(risk_payload, {"upstream_status": "ok"}, 200),
+            ):
+                context, _, status = manifest_context.build_runtime_llm_context(
+                    {
+                        "crop": crop,
+                        "sowing_date": "2026-05-10",
+                        "lat": 13.69,
+                        "lon": -89.21,
+                        "target_date": "2026-05-24",
+                        "conversation_started_date": "2026-05-17",
+                    }
+                )
+
+            self.assertEqual(status, 200)
+            calendar = context["crop_calendar"]
+            csv_text = calendar["csv"]
+            self.assertEqual(calendar["present_date"], "2026-05-17")
+            self.assertEqual(calendar["present_days_after_sowing"], 7)
+            self.assertIn("Día,Días desde Siembra,Días desde presente,Evento", csv_text)
+            self.assertIn("Siembra", csv_text)
+            self.assertIn("Presente", csv_text)
+            self.assertIn(expected_phase_event, csv_text)
+            self.assertNotIn("Codigo", csv_text)
+            self.assertTrue(context["phenology_calendar_rules"])
+
     def test_llm_explain_mentions_degraded_data_quality(self):
         result = manifest_context.explain_recommendation(
             {

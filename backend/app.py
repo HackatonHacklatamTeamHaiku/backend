@@ -27,8 +27,14 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # Enable CORS so the frontend can call the API from any origin
-    CORS(app)
+    # Allow browser calls from the deployed app and local development.
+    CORS(
+        app,
+        origins=app.config["CORS_ORIGINS"],
+        supports_credentials=True,
+        allow_headers=["Authorization", "Content-Type", "Accept"],
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    )
     app.before_request(require_api_auth)
 
     @app.errorhandler(SupabaseRestError)

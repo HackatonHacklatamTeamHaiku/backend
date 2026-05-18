@@ -96,11 +96,11 @@ Respuesta esperada:
 {
   "data": {
     "user_id": "uuid",
-    "email": "test@example.com",
+    "email": "<test-email>",
     "role": "authenticated",
     "claims": {
       "sub": "uuid",
-      "email": "test@example.com",
+      "email": "<test-email>",
       "role": "authenticated"
     },
     "profile": {
@@ -124,8 +124,8 @@ python scripts/seed_test_user.py
 
 Credenciales dev por defecto:
 
-- email: `test@example.com`
-- password: `TestPassword123!`
+- email: `<test-email>`
+- password: `<test-password>`
 
 Notas:
 

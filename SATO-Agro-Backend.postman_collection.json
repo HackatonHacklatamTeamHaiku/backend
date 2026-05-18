@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "SATO-Agro Backend",
-    "description": "Trimmed API collection for the SATO-Agro backend.\n\nPrimary routes live under /api/weather, /api/geo, /api/risk, /api/llm, and /api/auth.\nAll /api/* routes require Authorization: Bearer <supabase_access_token>, except / and /health.\nThe preferred chat contract is POST /api/llm/chat, where frontend may send a model and the backend keeps OpenRouter fallback routing to mistralai/mistral-medium-3.1.\nCompatibility routes are kept for /api/v1/documents/latest and the semantic AI tools announced by the backend manifest.\n\nBase URL: http://127.0.0.1:5000\nTest coordinates: San Salvador (lat=13.69, lon=-89.21)\nTest user: test@example.com / TestPassword123!",
+    "description": "Trimmed API collection for the SATO-Agro backend.\n\nPrimary routes live under /api/weather, /api/geo, /api/risk, /api/llm, and /api/auth.\nAll /api/* routes require Authorization: Bearer <supabase_access_token>, except / and /health.\nThe preferred chat contract is POST /api/llm/chat, where frontend may send a model and the backend keeps OpenRouter fallback routing to mistralai/mistral-medium-3.1.\nCompatibility routes are kept for /api/v1/documents/latest and the semantic AI tools announced by the backend manifest.\n\nBase URL: http://127.0.0.1:5000\nTest coordinates: San Salvador (lat=13.69, lon=-89.21)\nTest user: <test-email> / <test-password>",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -47,11 +47,11 @@
     },
     {
       "key": "testUserEmail",
-      "value": "test@example.com"
+      "value": "<test-email>"
     },
     {
       "key": "testUserPassword",
-      "value": "TestPassword123!"
+      "value": "<test-password>"
     }
   ],
   "item": [

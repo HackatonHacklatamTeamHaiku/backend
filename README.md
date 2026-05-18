@@ -162,8 +162,8 @@ python backend/scripts/seed_test_user.py
 
 Default dev credentials:
 
-- email: `test@example.com`
-- password: `TestPassword123!`
+- email: `<test-email>`
+- password: `<test-password>`
 
 The frontend still needs its own `SUPABASE_URL` and publishable key to perform login directly against Supabase Auth.
 

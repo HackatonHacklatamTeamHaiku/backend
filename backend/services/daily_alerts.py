@@ -162,10 +162,23 @@ def run_daily_risk_alerts(
         }
         try:
             crop = _crop_from_db(row["crop_code"])
+            sowing_date = _as_date_string(row["sowing_date"])
+            if date.fromisoformat(sowing_date) > parsed_target_date:
+                _record_item(
+                    summary,
+                    {
+                        **base_item,
+                        "crop": crop,
+                        "action": "skipped",
+                        "reason": "crop_not_started",
+                    },
+                )
+                continue
+
             assessment, _meta, status = get_risk_assessment(
                 {
                     "crop": crop,
-                    "sowing_date": _as_date_string(row["sowing_date"]),
+                    "sowing_date": sowing_date,
                     "lat": _as_float(row["lat"]),
                     "lon": _as_float(row["lon"]),
                     "target_date": parsed_target_date.isoformat(),

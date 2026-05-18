@@ -21,7 +21,7 @@ class Config:
     """Base configuration."""
 
     # ── Flask ────────────────────────────────────────────────
-    DEBUG = os.getenv("FLASK_DEBUG", "true").lower() == "true"
+    DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-prod")
     CORS_ORIGINS = [
         origin.strip()

@@ -20,6 +20,13 @@ from utils.time import now_utc_iso
 DEFAULT_FALLBACK_MODEL = "openai/gpt-5.4-nano"
 
 
+def _ancestor(path: Path, levels: int) -> Path | None:
+    try:
+        return path.parents[levels]
+    except IndexError:
+        return None
+
+
 def _trace_payload(value):
     return redact_payload(value) if should_redact_traces() else value
 
@@ -250,9 +257,9 @@ def _load_system_prompt() -> str:
     if configured:
         candidate_paths.append(Path(configured))
     candidate_paths.append(Path(__file__).resolve().parents[1] / "prompts" / "sato_agro_system_prompt.md")
-    candidate_paths.append(
-        Path(__file__).resolve().parents[3] / "infra---data-I-plus-D" / "model" / "SYSTEM_PROMPT.md"
-    )
+    workspace_root = _ancestor(Path(__file__).resolve(), 3)
+    if workspace_root is not None:
+        candidate_paths.append(workspace_root / "infra---data-I-plus-D" / "model" / "SYSTEM_PROMPT.md")
     for path in candidate_paths:
         if path.exists():
             return path.read_text(encoding="utf-8")
